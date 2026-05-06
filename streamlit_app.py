@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import streamlit as st
 
 from ecosystem_game import EcosystemAdventure, GRAZABLE_INVASIVE_EFFECTS, State
@@ -18,11 +19,13 @@ st.set_page_config(
 
 def _init_state() -> None:
     defaults = {
-        "game":     None,
-        "phase":    "intro",   # intro | main | sub_* | gameover
-        "submenu":  None,      # None | grazing | shrubs | reseed | invasive | inv_target
-        "log":      [],        # messages from the last completed turn
-        "prev":     {},        # metric values from the previous year (for delta display)
+        "game":             None,
+        "phase":            "intro",   # intro | main | sub_* | gameover
+        "submenu":          None,      # None | grazing | shrubs | reseed | invasive | inv_target
+        "log":              [],        # messages from the last completed turn
+        "prev":             {},        # metric values from the previous year (for delta display)
+        "undo_stack":       [],        # list of (game_snapshot, prev_snapshot) pairs
+        "undos_remaining":  None,      # None = unlimited (easy); int countdown (hard)
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -80,8 +83,19 @@ def _flush() -> list[str]:
     return msgs
 
 
+def _push_undo() -> None:
+    """Snapshot the current game + prev-metrics state onto the undo stack."""
+    st.session_state.undo_stack.append(
+        (copy.deepcopy(st.session_state.game), dict(st.session_state.prev))
+    )
+    # Cap easy-mode stack at 30 (one per year maximum)
+    if len(st.session_state.undo_stack) > 30:
+        st.session_state.undo_stack.pop(0)
+
+
 def _run(action_fn, *args, **kwargs) -> None:
     """Call a management action, simulate the year, collect messages, rerun."""
+    _push_undo()
     game.messages.clear()
     action_fn(*args, **kwargs)
     if not game.game_over:
@@ -199,6 +213,30 @@ def _btn(label: str, key: str, disabled: bool = False) -> bool:
     return st.button(label, key=key, use_container_width=True, disabled=disabled)
 
 
+def _render_undo_button() -> None:
+    stack = st.session_state.undo_stack
+    remaining = st.session_state.undos_remaining  # None = unlimited
+    can_undo = bool(stack) and (remaining is None or remaining > 0)
+
+    if remaining is None:
+        label = "↩️ Undo Last Action"
+    elif remaining > 0:
+        label = f"↩️ Undo  ({remaining} left)"
+    else:
+        label = "↩️ Undo  (none left)"
+
+    if st.button(label, key="undo", use_container_width=True, disabled=not can_undo):
+        game_snap, prev_snap = stack.pop()
+        st.session_state.game = game_snap
+        st.session_state.prev = prev_snap
+        if remaining is not None:
+            st.session_state.undos_remaining = remaining - 1
+        st.session_state.submenu = None
+        st.session_state.log    = []
+        st.session_state.phase  = "main"
+        st.rerun()
+
+
 def _render_main_menu() -> None:
     st.subheader("Management Actions")
 
@@ -228,6 +266,10 @@ def _render_main_menu() -> None:
 
     if _btn("⏭️ Do Nothing (advance year)", "nothing"):
         _run(game.do_nothing)
+
+    st.divider()
+
+    _render_undo_button()
 
 
 def _back_btn(target: str | None = None) -> None:
@@ -419,9 +461,11 @@ def _page_intro() -> None:
         g = EcosystemAdventure()
         g.headless  = True
         g.hard_mode = (difficulty == "Hard")
-        st.session_state.game  = g
-        st.session_state.log   = []
-        st.session_state.phase = "main"
+        st.session_state.game             = g
+        st.session_state.log              = []
+        st.session_state.phase            = "main"
+        st.session_state.undo_stack       = []
+        st.session_state.undos_remaining  = 3 if g.hard_mode else None
         _save_prev()  # need game bound for _save_prev
         st.rerun()
 
