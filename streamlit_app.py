@@ -87,30 +87,49 @@ def _run(action_fn, *args, **kwargs) -> None:
 
 # ── Status panel (left column) ────────────────────────────────────────────────
 
+def _coloured_bar(value: float, colour: str) -> str:
+    """Return HTML for a 100%-wide bar with a coloured fill."""
+    pct = max(0.0, min(100.0, value))
+    return (
+        f"<div style='background:#e6e6e6;border-radius:4px;height:14px;width:100%;"
+        f"overflow:hidden;'>"
+        f"<div style='background:{colour};height:100%;width:{pct:.1f}%;"
+        f"transition:width .3s;'></div>"
+        f"</div>"
+    )
+
+
+def _bar_colour(attr: str, val: float) -> str:
+    if attr == "ecosystem_function":
+        if val < 25:  return "#d62828"
+        if val < 50:  return "#e08e0b"
+        return "#2a9d3f"
+    if attr == "shrub_density":
+        return "#a06030"
+    return "#2a9d3f"
+
+
 def _render_status() -> None:
+    g = st.session_state.game
     st.subheader("Ecosystem Status")
 
-    # Metrics with year-over-year delta
     for label, attr, icon in METRIC_DEFS:
-        val  = getattr(game, attr)
-        delt = _delta(attr)
+        val   = getattr(g, attr)
+        delt  = _delta(attr) or ""
+        col   = _bar_colour(attr, val)
+        delta_html = (
+            f"<span style='color:#888;font-size:0.85em;'>&nbsp;{delt}</span>"
+            if delt else ""
+        )
+        st.markdown(
+            f"**{icon} {label}**&nbsp;&nbsp;<span style='color:#444;'>"
+            f"{val:.1f}%</span>{delta_html}",
+            unsafe_allow_html=True,
+        )
+        st.markdown(_coloured_bar(val, col), unsafe_allow_html=True)
+        st.write("")  # small spacer
 
-        # Colour the ecosystem-function bar red when it's dangerously low
-        bar_val = min(val / 100.0, 1.0)
-        if attr == "ecosystem_function" and val < 25:
-            bar_colour = "red"
-        elif attr == "ecosystem_function" and val < 50:
-            bar_colour = "orange"
-        else:
-            bar_colour = "green" if attr != "shrub_density" else "red"
-
-        col_m, col_b = st.columns([2, 3])
-        with col_m:
-            st.metric(f"{icon} {label}", f"{val:.1f}%", delta=delt)
-        with col_b:
-            st.progress(bar_val)
-
-    st.caption(f"🔥 Years since last fire: {game.years_since_fire}")
+    st.caption(f"🔥 Years since last fire: {g.years_since_fire}")
 
     # Active invasive species
     if game.invasive_species:
