@@ -52,14 +52,15 @@ METRIC_DEFS = [
 
 
 def _save_prev() -> None:
-    st.session_state.prev = {attr: getattr(game, attr) for _, attr, _ in METRIC_DEFS}
+    g = st.session_state.game
+    st.session_state.prev = {attr: getattr(g, attr) for _, attr, _ in METRIC_DEFS}
 
 
 def _delta(attr: str) -> str | None:
     prev = st.session_state.prev.get(attr)
     if prev is None:
         return None
-    d = getattr(game, attr) - prev
+    d = getattr(st.session_state.game, attr) - prev
     return f"{'+' if d >= 0 else ''}{d:.1f}%"
 
 
