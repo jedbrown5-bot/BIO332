@@ -381,6 +381,18 @@ def _page_intro() -> None:
     diversity and ecosystem function.  Both **fire** and **appropriate grazing**
     are needed to keep the system open and diverse.
 
+    **Ecosystem function** is the composite of three sub-processes that respond
+    differently to your decisions:
+    | Sub-function | What drives it |
+    |---|---|
+    | 🌾 **Productivity** | Plant growth — needs cover, diversity *and* healthy soil |
+    | 🪱 **Soil function** | Organic matter, microbes, structure — slow to build, fast to lose |
+    | 💧 **Hydrology** | Infiltration and water retention — depends on cover and soil |
+
+    Soil is the **limiting factor**: degraded soil caps how high productivity and
+    hydrology can climb, no matter how much grass you have. Some interventions
+    (like herbicide) damage soil — be careful what you reach for.
+
     > ⚠️ You begin in a **degraded, shrub-encroached state** — restoration is the challenge.
     """)
 
@@ -461,18 +473,46 @@ def _page_gameover() -> None:
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Final statistics")
-        stats = [
-            ("Grass cover",         f"{game.grass_cover:.1f}%"),
-            ("Grass biomass",       f"{game.grass_biomass:.1f}%"),
-            ("Grass diversity",     f"{game.grass_diversity:.1f}%"),
-            ("Shrub density",       f"{game.shrub_density:.1f}%"),
-            ("Ecosystem function",  f"{game.ecosystem_function:.1f}%"),
-            ("State transitions",   str(len(game.history))),
-            ("Invasive species",    str(len(game.invasive_species))),
-            ("Optimal fire interval", f"every {game.optimal_fire_interval} yrs (hidden)"),
-        ]
-        for label, val in stats:
-            st.metric(label, val)
+
+        def _stat_row(label: str, value: str) -> None:
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;"
+                f"padding:4px 0;border-bottom:1px solid #eee;'>"
+                f"<span style='color:#444;'>{label}</span>"
+                f"<span style='font-weight:600;'>{value}</span></div>",
+                unsafe_allow_html=True,
+            )
+
+        _stat_row("Grass cover",        f"{game.grass_cover:.1f}%")
+        _stat_row("Grass biomass",      f"{game.grass_biomass:.1f}%")
+        _stat_row("Grass diversity",    f"{game.grass_diversity:.1f}%")
+        _stat_row("Shrub density",      f"{game.shrub_density:.1f}%")
+        _stat_row("Ecosystem function", f"{game.ecosystem_function:.1f}%")
+
+        st.markdown(
+            "<div style='margin-top:10px;font-size:0.9em;color:#666;'>"
+            "Sub-functions:</div>",
+            unsafe_allow_html=True,
+        )
+        for sub_label, sub_attr, sub_icon, sub_col in SUB_FN_DEFS:
+            sub_val = getattr(game, sub_attr)
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;"
+                f"align-items:center;padding:2px 0;'>"
+                f"<span style='color:#444;'>&nbsp;&nbsp;{sub_icon} {sub_label}</span>"
+                f"<span style='font-weight:600;color:{sub_col};'>{sub_val:.1f}%</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                _coloured_bar(sub_val, sub_col).replace("height:14px", "height:6px"),
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+        _stat_row("State transitions",     str(len(game.history)))
+        _stat_row("Invasive species",      str(len(game.invasive_species)))
+        _stat_row("Optimal fire interval", f"every {game.optimal_fire_interval} yrs")
 
     with col2:
         score = game._compute_score()

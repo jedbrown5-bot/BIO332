@@ -323,6 +323,20 @@ class EcosystemAdventure:
         if grazable_present and self.grass_biomass > 45:
             hints.append("Palatable grass invaders + high biomass — targeted grazing could "
                          "suppress them (see invasive species menu).")
+
+        # Sub-function diagnostics — soil is the limiting factor.
+        if self.fn_soil < 30:
+            hints.append("Soil function is degraded — productivity and hydrology are "
+                         "capped until soil recovers. Avoid further chemical inputs.")
+        elif self.fn_soil < 45 and self.fn_productivity > self.fn_soil + 15:
+            hints.append("Productivity is running ahead of soil health — gains will "
+                         "stall unless soil recovers (cover, organic matter, no herbicide).")
+        if self.fn_hydrology < 30 and self.grass_cover < 50:
+            hints.append("Hydrology is poor — bare ground is shedding water. Increase "
+                         "ground cover to improve infiltration.")
+        if self.fn_productivity < 25 and self.grass_cover > 50:
+            hints.append("Cover is fine but productivity is low — likely a soil or "
+                         "diversity bottleneck rather than a cover problem.")
         return hints
 
     def show_menu(self) -> bool:
