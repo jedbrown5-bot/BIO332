@@ -140,10 +140,15 @@ class EcosystemAdventure:
 
     # ------------------------------------------------------------------
     def _compute_fn(self) -> float:
-        """Weighted composite of the three ecological sub-functions."""
+        """Weighted composite of the three ecological sub-functions.
+
+        Soil function is weighted highest because it's the slow-building
+        substrate everything else depends on — degraded soil cannot support
+        high productivity or good hydrology in the long run.
+        """
         return self.clamp(
-            0.40 * self.fn_productivity
-            + 0.30 * self.fn_soil
+            0.30 * self.fn_productivity
+            + 0.40 * self.fn_soil
             + 0.30 * self.fn_hydrology
         )
 
@@ -604,11 +609,12 @@ class EcosystemAdventure:
         elif choice == 3:
             if not self.spend(35):
                 self.pause(); return
-            self.shrub_density = self.clamp(self.shrub_density - 50)
-            self.fn_soil -= 15        # chemical disruption of soil biota
+            self.shrub_density = self.clamp(self.shrub_density - 40)
+            self.fn_soil -= 30        # chemical disruption persists for years
             self.fn_productivity -= 5  # transient non-target impacts
+            self.fn_hydrology  -= 5    # surface sealing from killed root mass
             self._recompute_ecosystem_function()
-            self._log("Herbicide applied. Shrubs -50%, soil health -15, productivity -5.")
+            self._log("Herbicide applied. Shrubs -40%, soil health -30, productivity -5, hydrology -5.")
             if random.random() < 0.2:
                 self._log("⚠️ The herbicide had unexpected consequences!")
                 if random.random() < 0.5:
@@ -913,7 +919,13 @@ class EcosystemAdventure:
 
     def _comprehensive_plan(self) -> None:
         self._log("Implementing comprehensive invasive species management plan...")
-        success_rate = min(0.9, 0.7 + (self.ecosystem_function / 200))
+        # Success depends on the resilience of the native community —
+        # healthy soil and diverse natives resist re-invasion;
+        # degraded systems re-invade no matter how many invaders you remove.
+        success_rate = min(
+            0.9,
+            0.4 + self.fn_soil / 200 + self.grass_diversity / 300,
+        )
 
         removed_count = 0
         weakened_count = 0
@@ -1119,7 +1131,16 @@ class EcosystemAdventure:
             self.shrub_density -= excess
 
     def _update_sub_functions(self) -> None:
-        """Update fn_productivity, fn_soil, fn_hydrology then recompute ecosystem_function."""
+        """Update fn_productivity, fn_soil, fn_hydrology then recompute ecosystem_function.
+
+        Soil function constrains the ceilings of productivity and hydrology:
+        degraded soils cannot sustain high primary production or good
+        infiltration, no matter how much above-ground vegetation you have.
+        """
+
+        # Soil-driven ceilings (ecological constraint)
+        prod_ceiling  = 50.0 + self.fn_soil * 0.5      # soil=0 → 50; soil=100 → 100
+        hydro_ceiling = 40.0 + self.fn_soil * 0.6      # soil=0 → 40; soil=100 → 100
 
         # ── Productivity ──────────────────────────────────────────────
         # Driven by grass cover + moderate biomass + diversity.
@@ -1137,6 +1158,9 @@ class EcosystemAdventure:
         prod_delta = prod_base + 0.5 * diversity_signal - biomass_penalty
         prod_delta += random.uniform(-0.3, 0.3)
         self.fn_productivity += prod_delta
+        # Drag back toward soil-imposed ceiling
+        if self.fn_productivity > prod_ceiling:
+            self.fn_productivity -= 0.4 * (self.fn_productivity - prod_ceiling)
 
         # ── Soil function ─────────────────────────────────────────────
         # Slow builder — organic matter from grass litter and root turnover.
@@ -1166,6 +1190,9 @@ class EcosystemAdventure:
             hydro_delta = random.uniform(-0.3, 0.2)
         hydro_delta += random.uniform(-0.15, 0.15)
         self.fn_hydrology += hydro_delta
+        # Drag back toward soil-imposed ceiling
+        if self.fn_hydrology > hydro_ceiling:
+            self.fn_hydrology -= 0.4 * (self.fn_hydrology - hydro_ceiling)
 
         self._recompute_ecosystem_function()
 
@@ -1318,16 +1345,29 @@ class EcosystemAdventure:
         if self.ecosystem_function <= 0:
             return 0
         score = 0.0
-        score += self.grass_cover * 0.4
-        score += self.grass_diversity * 0.6
-        score += (100 - abs(self.grass_biomass - 50)) * 0.2
-        score += (100 - self.shrub_density) * 0.3
-        score += self.ecosystem_function * 0.7
-        score -= len(self.invasive_species) * 20
+
+        # Above-ground state (cover, diversity, structure)
+        score += self.grass_cover * 0.25
+        score += self.grass_diversity * 0.4
+        score += (100 - abs(self.grass_biomass - 50)) * 0.15
+        score += (100 - self.shrub_density) * 0.2
+
+        # Ecosystem function — the geometric mean of sub-functions rewards
+        # BALANCE rather than averaging-out a degraded soil with lush growth.
+        # If any sub-function is near zero, this term collapses to near zero.
+        balance = (
+            max(0.0, self.fn_productivity)
+            * max(0.0, self.fn_soil)
+            * max(0.0, self.fn_hydrology)
+        ) ** (1.0 / 3.0)
+        score += balance * 1.5    # max contribution ≈ 150
+
+        score -= len(self.invasive_species) * 15
+
         if self.current_state is State.GRASSLAND:
-            score += 50
+            score += 35
         elif self.current_state is State.TRANSITION:
-            score += 25
+            score += 18
         return int(max(0, min(200, score)))
 
     @staticmethod
