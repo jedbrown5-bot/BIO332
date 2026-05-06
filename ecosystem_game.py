@@ -651,7 +651,7 @@ class EcosystemAdventure:
                 self.pause(); return
             self.grass_cover = self.clamp(self.grass_cover + gain)
             self.grass_diversity = self.clamp(
-                self.grass_diversity + gain * 0.15
+                self.grass_diversity + gain * 0.4
             )
             self._log(f"{label} completed. Grass cover increased by {gain}%.")
             if risk and random.random() < risk:
@@ -1030,12 +1030,11 @@ class EcosystemAdventure:
                 self.grass_diversity - 0.5 * years_factor
             )
 
-        if (30 <= self.grass_cover <= 80
-                and self.grass_biomass < 60
-                and self.years_since_fire <= 5
-                and self.grazing_pressure <= 40):
+        if (20 <= self.grass_cover <= 85
+                and self.grass_biomass < 70
+                and self.grazing_pressure <= 50):
             self.grass_diversity = self.clamp(
-                self.grass_diversity + random.uniform(0.3, 1.2)
+                self.grass_diversity + random.uniform(0.5, 1.5)
             )
 
         invasive_load = sum(sp.strength for sp in self.invasive_species)
@@ -1069,9 +1068,8 @@ class EcosystemAdventure:
 
     def _apply_function_feedback(self) -> None:
         if self.ecosystem_function < 50:
-            self.grass_cover = self.clamp(
-                self.grass_cover - (50 - self.ecosystem_function) / 10
-            )
+            loss = min(1.5, (50 - self.ecosystem_function) / 20)
+            self.grass_cover = self.clamp(self.grass_cover - loss)
 
     def _normalise_cover(self) -> None:
         total = self.grass_cover + self.shrub_density
@@ -1105,7 +1103,7 @@ class EcosystemAdventure:
         self.ecosystem_function = self.clamp(self.ecosystem_function + delta)
 
     def _maybe_introduce_invasive(self) -> None:
-        if random.random() < 0.4 and len(self.invasive_species) < self.MAX_INVASIVES:
+        if random.random() < 0.15 and len(self.invasive_species) < self.MAX_INVASIVES:
             self.introduce_invasive_species()
 
     def _random_event(self) -> None:
@@ -1251,7 +1249,7 @@ class EcosystemAdventure:
             score += 50
         elif self.current_state is State.TRANSITION:
             score += 25
-        return int(max(0, score))
+        return int(max(0, min(200, score)))
 
     @staticmethod
     def _rating(score: int) -> str:
