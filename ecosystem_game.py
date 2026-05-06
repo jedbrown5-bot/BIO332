@@ -74,22 +74,23 @@ GRAZABLE_INVASIVE_EFFECTS: set[str] = {
 EVENT_TABLE: list[tuple[str, str, dict, float]] = [
     ("Drought",
      "A severe drought has affected the region.",
-     {"grass": -15, "shrubs": -5, "ecosystem": -10}, 0.15),
+     {"grass": -15, "shrubs": -5, "productivity": -10, "hydrology": -8}, 0.15),
     ("Wet Year",
      "Unusually high rainfall has created favorable growing conditions.",
-     {"grass": 15, "shrubs": 10, "ecosystem": 10}, 0.15),
+     {"grass": 15, "shrubs": 10, "productivity": 10, "hydrology": 12}, 0.15),
     ("Lightning Fire",
      "Lightning has started a natural wildfire in the ecosystem.",
-     {"grass": -20, "shrubs": -25, "ecosystem": 5, "fire_reset": True}, 0.10),
+     {"grass": -20, "shrubs": -25, "productivity": 5, "soil": -4,
+      "fire_reset": True}, 0.10),
     ("Disease Outbreak",
      "A plant pathogen is affecting vegetation in the ecosystem.",
-     {"grass": -10, "shrubs": -10, "ecosystem": -15}, 0.10),
+     {"grass": -10, "shrubs": -10, "productivity": -10, "soil": -5}, 0.10),
     ("Insect Outbreak",
      "An outbreak of plant-eating insects is affecting the ecosystem.",
-     {"grass": -5, "shrubs": -15, "ecosystem": -10}, 0.10),
+     {"grass": -5, "shrubs": -15, "productivity": -10}, 0.10),
     ("Native Pollinator Boom",
      "Native pollinators are thriving, benefiting the ecosystem.",
-     {"grass": 5, "shrubs": 5, "ecosystem": 15}, 0.10),
+     {"grass": 5, "shrubs": 5, "productivity": 10, "soil": 5}, 0.10),
 ]
 
 
@@ -108,12 +109,19 @@ class EcosystemAdventure:
         self.grass_cover: float = random.uniform(10, 25)
         self.shrub_density: float = random.uniform(60, 85)
         self.grazing_pressure: float = random.uniform(60, 80)
-        self.ecosystem_function: float = random.uniform(30, 50)
 
         self.grass_biomass: float = self.grass_cover * random.uniform(0.6, 1.2)
         self.grass_diversity: float = min(
             60.0, self.grass_cover + random.uniform(20, 35)
         )
+
+        # Sub-functions of ecosystem function (each 0–100)
+        # Start degraded: shrubland suppresses productivity and hydrology;
+        # soil retains moderate function because shrub roots still cycle nutrients.
+        self.fn_productivity: float = random.uniform(20, 35)
+        self.fn_soil: float       = random.uniform(35, 55)
+        self.fn_hydrology: float  = random.uniform(20, 40)
+        self.ecosystem_function: float = self._compute_fn()
 
         self.current_state: State = State.SHRUBLAND
         self.year: int = 1
@@ -129,6 +137,21 @@ class EcosystemAdventure:
         # Headless mode: suppress input() and print(); collect output in messages.
         self.headless: bool = False
         self.messages: list[str] = []
+
+    # ------------------------------------------------------------------
+    def _compute_fn(self) -> float:
+        """Weighted composite of the three ecological sub-functions."""
+        return self.clamp(
+            0.40 * self.fn_productivity
+            + 0.30 * self.fn_soil
+            + 0.30 * self.fn_hydrology
+        )
+
+    def _recompute_ecosystem_function(self) -> None:
+        self.fn_productivity     = self.clamp(self.fn_productivity)
+        self.fn_soil             = self.clamp(self.fn_soil)
+        self.fn_hydrology        = self.clamp(self.fn_hydrology)
+        self.ecosystem_function  = self._compute_fn()
 
     def clear_screen(self) -> None:
         if not self.headless:
@@ -333,7 +356,8 @@ class EcosystemAdventure:
 
         self.shrub_density = self.clamp(self.shrub_density + shrub_growth)
         self.grazing_pressure = self.clamp(self.grazing_pressure + grazing_drift)
-        self.ecosystem_function = self.clamp(self.ecosystem_function - eco_decline)
+        self.fn_productivity -= eco_decline
+        self._recompute_ecosystem_function()
 
         self._log(f"Shrubs grew by {shrub_growth:.1f}% from lack of intervention.")
         self._log(f"Grazing pressure drifted up by {grazing_drift:.1f}%.")
@@ -411,7 +435,10 @@ class EcosystemAdventure:
         self.grass_biomass = self.clamp(self.grass_biomass * 0.15)
         self.shrub_density = self.clamp(self.shrub_density - shrub_red)
         self.grass_cover = self.clamp(self.grass_cover - random.uniform(5, 10))
-        self.ecosystem_function = self.clamp(self.ecosystem_function + eco_impact)
+        self.fn_productivity += eco_impact
+        # Fire briefly harms soil micro-organisms but recovers quickly
+        self.fn_soil -= random.uniform(2, 5)
+        self._recompute_ecosystem_function()
 
         if density_msg:
             self._log(density_msg)
@@ -490,7 +517,9 @@ class EcosystemAdventure:
 
             if intensity >= 80:
                 hit = random.uniform(5, 15)
-                self.ecosystem_function = self.clamp(self.ecosystem_function - hit)
+                self.fn_productivity -= hit
+                self.fn_soil -= random.uniform(2, 4)  # compaction
+                self._recompute_ecosystem_function()
                 self._log(f"Intense grazing reduced ecosystem function by {hit:.1f}%.")
 
         self.pause()
@@ -576,8 +605,10 @@ class EcosystemAdventure:
             if not self.spend(35):
                 self.pause(); return
             self.shrub_density = self.clamp(self.shrub_density - 50)
-            self.ecosystem_function = self.clamp(self.ecosystem_function - 20)
-            self._log("Herbicide applied. Shrubs -50%, ecosystem function -20%.")
+            self.fn_soil -= 15        # chemical disruption of soil biota
+            self.fn_productivity -= 5  # transient non-target impacts
+            self._recompute_ecosystem_function()
+            self._log("Herbicide applied. Shrubs -50%, soil health -15, productivity -5.")
             if random.random() < 0.2:
                 self._log("⚠️ The herbicide had unexpected consequences!")
                 if random.random() < 0.5:
@@ -624,7 +655,8 @@ class EcosystemAdventure:
                 self.introduce_invasive_species()
 
         self.shrub_density = self.clamp(self.shrub_density - shrub_red)
-        self.ecosystem_function = self.clamp(self.ecosystem_function + eco)
+        self.fn_productivity += eco
+        self._recompute_ecosystem_function()
 
     RESEED_OPTIONS: list[tuple[str, int, int, float]] = [
         ("Minimal reseeding (+10%)",   15, 10, 0.0),
@@ -675,7 +707,10 @@ class EcosystemAdventure:
                   f"diversity +{div_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             self.grass_diversity = self.clamp(self.grass_diversity + div_d)
-            self.ecosystem_function = self.clamp(self.ecosystem_function + eco_d)
+            self.fn_productivity += eco_d
+            self.fn_soil += eco_d * 0.4  # diverse roots improve soil biology too
+            self.fn_hydrology += eco_d * 0.3
+            self._recompute_ecosystem_function()
             if self.invasive_species and random.random() < 0.4:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
@@ -730,14 +765,18 @@ class EcosystemAdventure:
     def _effect_allelopathic(self, sp: Invasive) -> None:
         self.grass_diversity = self.clamp(self.grass_diversity - 7 * sp.strength)
         self.grass_cover = self.clamp(self.grass_cover - 2 * sp.strength)
-        self.ecosystem_function = self.clamp(self.ecosystem_function - 4 * sp.strength)
+        # Allelopathic chemicals disrupt soil microbial communities
+        self.fn_soil -= 4 * sp.strength
+        self._recompute_ecosystem_function()
         self._log(f"  • {sp.name} releases allelopathic toxins — diversity falls "
-              f"and livestock health suffers.")
+              f"and soil biology suffers.")
 
     def _effect_nitrogen_fixer(self, sp: Invasive) -> None:
         self.shrub_density = self.clamp(self.shrub_density + 6 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 3 * sp.strength)
-        self.ecosystem_function = self.clamp(self.ecosystem_function - 2 * sp.strength)
+        # N enrichment destabilises nutrient cycling, shifts community away from natives
+        self.fn_soil -= 2 * sp.strength
+        self._recompute_ecosystem_function()
         self._log(f"  • {sp.name} is establishing woody dominance — soil N "
               f"enrichment favours further woody invasion.")
 
@@ -745,9 +784,11 @@ class EcosystemAdventure:
         self.grass_cover = self.clamp(self.grass_cover + 2 * sp.strength)
         self.grass_biomass = self.clamp(self.grass_biomass + 8 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 8 * sp.strength)
-        self.ecosystem_function = self.clamp(self.ecosystem_function - 3 * sp.strength)
+        # Dense monoculture mats reduce water infiltration
+        self.fn_hydrology -= 3 * sp.strength
+        self._recompute_ecosystem_function()
         self._log(f"  • {sp.name} is spreading laterally — biomass surges, "
-              f"natives crowded out.")
+              f"infiltration drops.")
 
     def _effect_shade_creator(self, sp: Invasive) -> None:
         self.shrub_density = self.clamp(self.shrub_density + 8 * sp.strength)
@@ -823,9 +864,8 @@ class EcosystemAdventure:
         if random.random() < 0.6:
             self.invasive_species.pop(idx - 1)
             self._log(f"Success! You've effectively controlled {target.name}.")
-            self.ecosystem_function = self.clamp(
-                self.ecosystem_function + random.uniform(5, 10)
-            )
+            self.fn_productivity += random.uniform(5, 10)
+            self._recompute_ecosystem_function()
         else:
             self._log(f"Despite your efforts, {target.name} persists.")
             if random.random() < 0.3:
@@ -842,9 +882,8 @@ class EcosystemAdventure:
                     random.randrange(len(self.invasive_species))
                 )
                 self._log(f"The biocontrol successfully managed {removed.name}!")
-            self.ecosystem_function = self.clamp(
-                self.ecosystem_function + random.uniform(5, 15)
-            )
+            self.fn_productivity += random.uniform(5, 15)
+            self._recompute_ecosystem_function()
         elif outcome > 0.4:
             for sp in self.invasive_species:
                 sp.strength *= 0.7
@@ -853,9 +892,9 @@ class EcosystemAdventure:
             self._log("The biocontrol agents failed to establish.")
         else:
             self._log("⚠️ The biocontrol agents themselves have become invasive!")
-            self.ecosystem_function = self.clamp(
-                self.ecosystem_function - random.uniform(10, 20)
-            )
+            self.fn_productivity -= random.uniform(10, 20)
+            self.fn_soil -= random.uniform(3, 8)
+            self._recompute_ecosystem_function()
             self.invasive_species.append(Invasive(
                 name="Invasive Biocontrol Agent",
                 effect="rapid_growth",
@@ -892,7 +931,8 @@ class EcosystemAdventure:
             self._log(f"Weakened the impact of {weakened_count} invasive species.")
 
         boost = random.uniform(5, 15)
-        self.ecosystem_function = self.clamp(self.ecosystem_function + boost)
+        self.fn_productivity += boost
+        self._recompute_ecosystem_function()
         self._log(f"The comprehensive approach improved ecosystem function by {boost:.1f}%.")
 
     def _targeted_grazing(self) -> None:
@@ -961,7 +1001,7 @@ class EcosystemAdventure:
         self._apply_biomass_dynamics()
         self._apply_diversity_dynamics()
 
-        self._update_function_trend()
+        self._update_sub_functions()
 
         labels = ["Grass cover       ", "Grass biomass     ", "Grass diversity   ",
                   "Shrub density     ", "Ecosystem function"]
@@ -1078,29 +1118,56 @@ class EcosystemAdventure:
             self.grass_cover -= excess
             self.shrub_density -= excess
 
-    def _update_function_trend(self) -> None:
+    def _update_sub_functions(self) -> None:
+        """Update fn_productivity, fn_soil, fn_hydrology then recompute ecosystem_function."""
+
+        # ── Productivity ──────────────────────────────────────────────
+        # Driven by grass cover + moderate biomass + diversity.
+        # Penalised by overgrazing and excessive biomass accumulation.
         diversity_signal = (self.grass_diversity - 50) / 25
+        biomass_penalty  = max(0.0, self.grass_biomass - 70) / 15
 
-        biomass_penalty = max(0.0, self.grass_biomass - 70) / 15
-
-        good_cover = (
-            40 < self.grass_cover < 85
-            and self.shrub_density < 40
-            and self.grazing_pressure < 60
-        )
-        bad_cover = self.grass_cover < 15 or self.shrub_density > 70
-
-        if good_cover:
-            base = 1.0
-        elif bad_cover:
-            base = -1.2
+        if self.grass_cover > 40 and self.shrub_density < 40 and self.grazing_pressure < 60:
+            prod_base = 1.2
+        elif self.grass_cover < 15 or self.shrub_density > 70:
+            prod_base = -1.2
         else:
-            base = -0.3
+            prod_base = -0.2
 
-        delta = base + 0.6 * diversity_signal - biomass_penalty
-        delta += random.uniform(-0.3, 0.3)
+        prod_delta = prod_base + 0.5 * diversity_signal - biomass_penalty
+        prod_delta += random.uniform(-0.3, 0.3)
+        self.fn_productivity += prod_delta
 
-        self.ecosystem_function = self.clamp(self.ecosystem_function + delta)
+        # ── Soil function ─────────────────────────────────────────────
+        # Slow builder — organic matter from grass litter and root turnover.
+        # Degrades slowly under bare ground; compaction from heavy grazing.
+        if self.grass_cover > 30 and self.grass_biomass > 20:
+            soil_delta = random.uniform(0.3, 0.7)   # slow organic-matter build
+        elif self.grass_cover < 10:
+            soil_delta = random.uniform(-0.8, -0.4)  # erosion, no input
+        else:
+            soil_delta = random.uniform(-0.2, 0.2)   # neutral
+
+        if self.grazing_pressure > 60:
+            soil_delta -= 0.3  # compaction penalty
+        soil_delta += random.uniform(-0.1, 0.1)
+        self.fn_soil += soil_delta
+
+        # ── Hydrology ────────────────────────────────────────────────
+        # Grass roots maintain soil structure for infiltration.
+        # Shrub thickets and bare ground both reduce infiltration.
+        if self.grass_cover > 50 and self.shrub_density < 40:
+            hydro_delta = random.uniform(0.6, 1.2)
+        elif self.grass_cover > 30:
+            hydro_delta = random.uniform(0.1, 0.4)
+        elif self.shrub_density > 50 or self.grass_cover < 15:
+            hydro_delta = random.uniform(-1.2, -0.5)
+        else:
+            hydro_delta = random.uniform(-0.3, 0.2)
+        hydro_delta += random.uniform(-0.15, 0.15)
+        self.fn_hydrology += hydro_delta
+
+        self._recompute_ecosystem_function()
 
     def _maybe_introduce_invasive(self) -> None:
         if random.random() < 0.15 and len(self.invasive_species) < self.MAX_INVASIVES:
@@ -1128,25 +1195,37 @@ class EcosystemAdventure:
         is_lightning_fire = (name == "Lightning Fire")
         density_msg_to_print = ""
 
-        for key, label in (("grass", "Grass cover"),
-                           ("shrubs", "Shrub density"),
-                           ("ecosystem", "Ecosystem function")):
+        # Grass cover and shrub density
+        for key, attr, label in (
+            ("grass",  "grass_cover",   "Grass cover"),
+            ("shrubs", "shrub_density", "Shrub density"),
+        ):
             if key not in effects:
                 continue
-            attr = {"grass": "grass_cover",
-                    "shrubs": "shrub_density",
-                    "ecosystem": "ecosystem_function"}[key]
             old_val = getattr(self, attr)
-
             if key == "shrubs" and is_lightning_fire:
                 factor, density_msg_to_print = self._fire_shrub_density_factor()
                 delta = effects[key] * factor
             else:
                 delta = effects[key]
-
             new_val = self.clamp(old_val + delta)
             setattr(self, attr, new_val)
             self._log(f"  {label}: {old_val:.1f}% → {new_val:.1f}%")
+
+        # Sub-function effects
+        for key, sub_attr, label in (
+            ("productivity", "fn_productivity", "Productivity"),
+            ("soil",         "fn_soil",         "Soil function"),
+            ("hydrology",    "fn_hydrology",    "Hydrology"),
+        ):
+            if key not in effects:
+                continue
+            old_val = getattr(self, sub_attr)
+            new_val = self.clamp(old_val + effects[key])
+            setattr(self, sub_attr, new_val)
+            sign = "+" if effects[key] >= 0 else ""
+            self._log(f"  {label}: {sign}{effects[key]:.0f}%")
+        self._recompute_ecosystem_function()
 
         if density_msg_to_print:
             self._log(density_msg_to_print)

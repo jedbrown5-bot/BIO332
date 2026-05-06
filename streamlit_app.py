@@ -50,10 +50,19 @@ METRIC_DEFS = [
     ("Grazing Pressure",   "grazing_pressure",    "🐄"),
 ]
 
+# Sub-functions tracked separately for display (not included in delta tracking)
+SUB_FN_DEFS = [
+    ("Productivity",   "fn_productivity", "🌾", "#2a9d3f"),
+    ("Soil function",  "fn_soil",         "🪱", "#8B5E3C"),
+    ("Hydrology",      "fn_hydrology",    "💧", "#1d7fc4"),
+]
+
 
 def _save_prev() -> None:
     g = st.session_state.game
     st.session_state.prev = {attr: getattr(g, attr) for _, attr, _ in METRIC_DEFS}
+    for _, attr, _, _ in SUB_FN_DEFS:
+        st.session_state.prev[attr] = getattr(g, attr)
 
 
 def _delta(attr: str) -> str | None:
@@ -127,28 +136,60 @@ def _render_status() -> None:
             unsafe_allow_html=True,
         )
         st.markdown(_coloured_bar(val, col), unsafe_allow_html=True)
+
+        # Show sub-functions inline under the Ecosystem Function bar
+        if attr == "ecosystem_function":
+            st.markdown(
+                "<div style='margin-left:16px;margin-top:4px;'>",
+                unsafe_allow_html=True,
+            )
+            for sub_label, sub_attr, sub_icon, sub_col in SUB_FN_DEFS:
+                sub_val = getattr(g, sub_attr)
+                sub_prev = st.session_state.prev.get(sub_attr)
+                if sub_prev is not None:
+                    d = sub_val - sub_prev
+                    sub_delt = f"{'+'  if d >= 0 else ''}{d:.1f}%"
+                    sub_delt_html = (
+                        f"<span style='color:#888;font-size:0.78em;'>&nbsp;{sub_delt}</span>"
+                    )
+                else:
+                    sub_delt_html = ""
+                st.markdown(
+                    f"<span style='font-size:0.88em;'>{sub_icon} {sub_label}&nbsp;"
+                    f"<span style='color:#444;'>{sub_val:.1f}%</span>"
+                    f"{sub_delt_html}</span>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    _coloured_bar(sub_val, sub_col).replace(
+                        "height:14px", "height:8px"
+                    ),
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
         st.write("")  # small spacer
 
     st.caption(f"🔥 Years since last fire: {g.years_since_fire}")
 
     # Active invasive species
-    if game.invasive_species:
+    if g.invasive_species:
         st.error("⚠️ Active invasive species")
-        for sp in game.invasive_species:
+        for sp in g.invasive_species:
             st.markdown(f"&nbsp;&nbsp;**{sp.name}** — Impact: {int(sp.strength * 100)}%")
 
     # Contextual hints (easy mode only)
-    if not game.hard_mode:
-        hints = game._diagnostic_hints()
+    if not g.hard_mode:
+        hints = g._diagnostic_hints()
         if hints:
             with st.expander("🔬 Field observations", expanded=True):
                 for h in hints:
                     st.info(h)
 
     # State-transition history
-    if game.history:
+    if g.history:
         with st.expander("📜 State transition history"):
-            for h in game.history:
+            for h in g.history:
                 st.markdown(h)
 
 
