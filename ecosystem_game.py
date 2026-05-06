@@ -50,13 +50,14 @@ class State(Enum):
 class Invasive:
     """A single invasive species population."""
     name: str
-    effect: str          # grass_competitor | allelopathic | nitrogen_fixer
-                         # | rapid_growth   | shade_creator
+    effect: str          # grass_competitor | unpalatable_competitor
+                         # | allelopathic    | nitrogen_fixer
+                         # | rapid_growth    | shade_creator
     strength: float      # 0.0 - 0.5
 
 
 INVASIVE_POOL: list[tuple[str, str, tuple[float, float]]] = [
-    ("African lovegrass", "grass_competitor", (0.10, 0.30)),
+    ("African lovegrass", "unpalatable_competitor", (0.10, 0.30)),
     ("Fireweed",          "allelopathic",     (0.10, 0.30)),
     ("African Olive",     "nitrogen_fixer",   (0.10, 0.30)),
     ("Buffel grass",      "rapid_growth",     (0.20, 0.40)),
@@ -765,11 +766,12 @@ class EcosystemAdventure:
 
     def apply_invasive_effects(self) -> None:
         effect_handlers = {
-            "grass_competitor": self._effect_grass_competitor,
-            "allelopathic":     self._effect_allelopathic,
-            "nitrogen_fixer":   self._effect_nitrogen_fixer,
-            "rapid_growth":     self._effect_rapid_growth,
-            "shade_creator":    self._effect_shade_creator,
+            "grass_competitor":        self._effect_grass_competitor,
+            "unpalatable_competitor":  self._effect_unpalatable_competitor,
+            "allelopathic":            self._effect_allelopathic,
+            "nitrogen_fixer":          self._effect_nitrogen_fixer,
+            "rapid_growth":            self._effect_rapid_growth,
+            "shade_creator":           self._effect_shade_creator,
         }
         for sp in self.invasive_species:
             handler = effect_handlers.get(sp.effect)
@@ -781,6 +783,24 @@ class EcosystemAdventure:
         self.grass_diversity = self.clamp(self.grass_diversity - 7 * sp.strength)
         self._log(f"  • {sp.name} forms dominant tussocks — biomass climbs while "
               f"natives are excluded.")
+
+    def _effect_unpalatable_competitor(self, sp: Invasive) -> None:
+        # Unpalatable tussock-formers (e.g. African lovegrass) — stock avoid
+        # them, so they accumulate biomass faster than palatable competitors
+        # while heavy grazing on the surrounding palatable natives makes
+        # things worse, not better.
+        self.grass_biomass = self.clamp(self.grass_biomass + 8 * sp.strength)
+        self.grass_diversity = self.clamp(self.grass_diversity - 8 * sp.strength)
+        if self.grazing_pressure > 30:
+            # Selective grazing on natives gives the invader more space
+            self.grass_diversity = self.clamp(
+                self.grass_diversity - 3 * sp.strength
+            )
+            self._log(f"  • {sp.name} (unpalatable) — stock avoid it and graze "
+                      f"the palatable natives instead, accelerating its dominance.")
+        else:
+            self._log(f"  • {sp.name} (unpalatable) — forms dense tussocks that "
+                      f"livestock won't touch; mechanical or chemical control needed.")
 
     def _effect_allelopathic(self, sp: Invasive) -> None:
         self.grass_diversity = self.clamp(self.grass_diversity - 7 * sp.strength)
