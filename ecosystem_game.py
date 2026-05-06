@@ -126,24 +126,34 @@ class EcosystemAdventure:
         self.optimal_fire_interval: int = random.randint(3, 6)
 
         self.hard_mode: bool = False
+        # Headless mode: suppress input() and print(); collect output in messages.
+        self.headless: bool = False
+        self.messages: list[str] = []
 
-    @staticmethod
-    def clear_screen() -> None:
-        os.system("cls" if os.name == "nt" else "clear")
+    def clear_screen(self) -> None:
+        if not self.headless:
+            os.system("cls" if os.name == "nt" else "clear")
 
-    @staticmethod
-    def pause(prompt: str = "\nPress Enter to continue...") -> None:
-        input(prompt)
+    def pause(self, prompt: str = "\nPress Enter to continue...") -> None:
+        if not self.headless:
+            input(prompt)
 
     @staticmethod
     def clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
         return max(lo, min(hi, x))
 
+    def _log(self, *args, sep: str = " ") -> None:
+        """Collect output. In terminal mode also prints immediately."""
+        msg = sep.join(str(a) for a in args)
+        self.messages.append(msg)
+        if not self.headless:
+            print(msg)
+
     def spend(self, amount: int) -> bool:
         if not self.hard_mode:
             return True
         if self.budget < amount:
-            print(f"🚫 Not enough budget. Need ${amount}, have ${self.budget}.")
+            self._log(f"🚫 Not enough budget. Need ${amount}, have ${self.budget}.")
             return False
         self.budget -= amount
         return True
@@ -170,62 +180,62 @@ class EcosystemAdventure:
 
     def _show_intro(self) -> None:
         self.clear_screen()
-        print("=" * 60)
-        print("ECOSYSTEM MANAGEMENT: STATE AND TRANSITION ADVENTURE")
-        print("=" * 60)
-        print("\nWelcome! You are managing a grassland ecosystem that can")
-        print("exist in multiple stable states. Your goal is to maintain")
-        print("(or restore) a healthy grass-dominated ecosystem.")
-        print("\nThe ecosystem has feedback loops, thresholds, and hysteresis:")
-        print("  • GRASSLAND  - grass-dominated, frequent fires")
-        print("  • TRANSITION - mixed and unstable")
-        print("  • SHRUBLAND  - shrub-dominated, infrequent fires")
-        print("\nThe grass community is tracked in three dimensions:")
-        print("  • COVER     - how much ground is occupied by grass")
-        print("  • BIOMASS   - standing crop + litter (the fuel load)")
-        print("  • DIVERSITY - richness of the grass community")
-        print("\nA productive grassland with no disturbance accumulates biomass,")
-        print("which suppresses diversity and ultimately ecosystem function.")
-        print("Disturbance (fire OR appropriate grazing) is required to keep")
-        print("the system functional. Beware of crossing thresholds!")
+        self._log("=" * 60)
+        self._log("ECOSYSTEM MANAGEMENT: STATE AND TRANSITION ADVENTURE")
+        self._log("=" * 60)
+        self._log("\nWelcome! You are managing a grassland ecosystem that can")
+        self._log("exist in multiple stable states. Your goal is to maintain")
+        self._log("(or restore) a healthy grass-dominated ecosystem.")
+        self._log("\nThe ecosystem has feedback loops, thresholds, and hysteresis:")
+        self._log("  • GRASSLAND  - grass-dominated, frequent fires")
+        self._log("  • TRANSITION - mixed and unstable")
+        self._log("  • SHRUBLAND  - shrub-dominated, infrequent fires")
+        self._log("\nThe grass community is tracked in three dimensions:")
+        self._log("  • COVER     - how much ground is occupied by grass")
+        self._log("  • BIOMASS   - standing crop + litter (the fuel load)")
+        self._log("  • DIVERSITY - richness of the grass community")
+        self._log("\nA productive grassland with no disturbance accumulates biomass,")
+        self._log("which suppresses diversity and ultimately ecosystem function.")
+        self._log("Disturbance (fire OR appropriate grazing) is required to keep")
+        self._log("the system functional. Beware of crossing thresholds!")
 
         self._choose_difficulty()
         self.pause("\nPress Enter to begin your adventure...")
 
     def _choose_difficulty(self) -> None:
-        print("\n" + "-" * 60)
-        print("Choose difficulty:")
-        print("  1. EASY - field observations and ecologist tips appear,")
-        print("           and budget is not a constraint. Focus on the ecology.")
-        print("  2. HARD - no hints, and you have a tight management budget")
-        print(f"           (start: ${self.STARTING_BUDGET}, annual top-up: "
+        self._log("\n" + "-" * 60)
+        self._log("Choose difficulty:")
+        self._log("  1. EASY - field observations and ecologist tips appear,")
+        self._log("           and budget is not a constraint. Focus on the ecology.")
+        self._log("  2. HARD - no hints, and you have a tight management budget")
+        self._log(f"           (start: ${self.STARTING_BUDGET}, annual top-up: "
               f"${self.ANNUAL_BUDGET}). Spend carefully.")
         while True:
             choice = input("\nEnter 1 or 2: ").strip()
             if choice == "1":
                 self.hard_mode = False
-                print("\nEASY MODE: hints will appear, money is no object.")
+                self._log("\nEASY MODE: hints will appear, money is no object.")
                 return
             if choice == "2":
                 self.hard_mode = True
-                print("\nHARD MODE: no hints, and resources are limited.")
+                self._log("\nHARD MODE: no hints, and resources are limited.")
                 return
-            print("Please enter 1 or 2.")
+            self._log("Please enter 1 or 2.")
 
     def _check_end_conditions(self) -> None:
         if self.year >= self.GAME_LENGTH:
             self.game_over = True
         elif self.ecosystem_function <= 0:
-            print("\n💀 ECOSYSTEM COLLAPSE: function has reached zero.")
-            print("The land can no longer support the community that lived here.")
+            self._log("\n💀 ECOSYSTEM COLLAPSE: function has reached zero.")
+            self._log("The land can no longer support the community that lived here.")
             self.pause()
             self.game_over = True
 
     def display_status(self) -> None:
         self.clear_screen()
-        print("\n===== ECOSYSTEM STATUS =====")
-        print(f"Year: {self.year} / {self.GAME_LENGTH}")
-        print(f"Current State: {self.current_state.value}")
+        self._log("\n===== ECOSYSTEM STATUS =====")
+        self._log(f"Year: {self.year} / {self.GAME_LENGTH}")
+        self._log(f"Current State: {self.current_state.value}")
 
         bars = [
             ("Grass Cover       ", self.grass_cover,        "🌿",  5),
@@ -236,30 +246,30 @@ class EcosystemAdventure:
             ("Grazing Pressure  ", self.grazing_pressure,   "🐄", 10),
         ]
         for label, value, emoji, divisor in bars:
-            print(f"{label}: {value:5.1f}%  {emoji * int(value / divisor)}")
+            self._log(f"{label}: {value:5.1f}%  {emoji * int(value / divisor)}")
 
-        print(f"Years since last fire: {self.years_since_fire}")
+        self._log(f"Years since last fire: {self.years_since_fire}")
         if self.hard_mode:
-            print(f"Budget: ${self.budget}")
+            self._log(f"Budget: ${self.budget}")
 
         descriptions = {
             State.GRASSLAND:  "Grass-fire feedback maintains an open ecosystem.",
             State.TRANSITION: "Shifting between grass and shrub dominance — careful management is needed.",
             State.SHRUBLAND:  "Woody plants are locked in by positive feedbacks.",
         }
-        print(f"\n{descriptions[self.current_state]}")
+        self._log(f"\n{descriptions[self.current_state]}")
 
         if not self.hard_mode:
             hints = self._diagnostic_hints()
             if hints:
-                print("\nField observations:")
+                self._log("\nField observations:")
                 for hint in hints:
-                    print(f"  • {hint}")
+                    self._log(f"  • {hint}")
 
         if self.invasive_species:
-            print("\n⚠️ ACTIVE INVASIVE SPECIES:")
+            self._log("\n⚠️ ACTIVE INVASIVE SPECIES:")
             for i, sp in enumerate(self.invasive_species, 1):
-                print(f"  {i}. {sp.name} — Impact: {int(sp.strength * 100)}%")
+                self._log(f"  {i}. {sp.name} — Impact: {int(sp.strength * 100)}%")
 
     def _diagnostic_hints(self) -> list[str]:
         hints: list[str] = []
@@ -299,9 +309,9 @@ class EcosystemAdventure:
             "8": ("Exit game",                      self.exit_game,               False),
         }
 
-        print("\n=== MANAGEMENT OPTIONS ===")
+        self._log("\n=== MANAGEMENT OPTIONS ===")
         for key, (label, _, _) in actions.items():
-            print(f"{key}. {label}")
+            self._log(f"{key}. {label}")
 
         choice = input("\nWhat would you like to do? ").strip()
         if choice in actions:
@@ -309,13 +319,14 @@ class EcosystemAdventure:
             handler()
             return advances and not self.game_over
 
-        print("Invalid choice. Please try again.")
+        self._log("Invalid choice. Please try again.")
         self.pause()
         return False
 
     def do_nothing(self) -> None:
-        print("\nYou chose to do nothing this year...")
-        time.sleep(1)
+        self._log("\nYou chose to do nothing this year...")
+        if not self.headless:
+            time.sleep(1)
         shrub_growth = random.uniform(1, 3)
         grazing_drift = random.uniform(0, 2)
         eco_decline = random.uniform(0, 2) if self.ecosystem_function > 40 else 0
@@ -324,23 +335,23 @@ class EcosystemAdventure:
         self.grazing_pressure = self.clamp(self.grazing_pressure + grazing_drift)
         self.ecosystem_function = self.clamp(self.ecosystem_function - eco_decline)
 
-        print(f"Shrubs grew by {shrub_growth:.1f}% from lack of intervention.")
-        print(f"Grazing pressure drifted up by {grazing_drift:.1f}%.")
+        self._log(f"Shrubs grew by {shrub_growth:.1f}% from lack of intervention.")
+        self._log(f"Grazing pressure drifted up by {grazing_drift:.1f}%.")
         if eco_decline > 0:
-            print(f"Ecosystem function declined by {eco_decline:.1f}%.")
+            self._log(f"Ecosystem function declined by {eco_decline:.1f}%.")
         self.pause()
 
     def exit_game(self) -> None:
-        print("\nExiting game. Thanks for playing!")
+        self._log("\nExiting game. Thanks for playing!")
         self.game_over = True
 
     def display_history(self) -> None:
-        print("\n=== ECOSYSTEM STATE HISTORY ===")
+        self._log("\n=== ECOSYSTEM STATE HISTORY ===")
         if not self.history:
-            print("No state transitions have occurred yet.")
+            self._log("No state transitions have occurred yet.")
         else:
             for event in self.history:
-                print(event)
+                self._log(event)
         self.pause()
 
     def conduct_prescribed_burn(self) -> None:
@@ -348,7 +359,7 @@ class EcosystemAdventure:
             self.pause()
             return
 
-        print("\n🔥 Conducting prescribed burn...")
+        self._log("\n🔥 Conducting prescribed burn...")
 
         fuel = self.grass_biomass
         success_chance = (fuel / 100) * 0.85
@@ -356,39 +367,39 @@ class EcosystemAdventure:
         pre_fire_biomass = self.grass_biomass
 
         if fuel < 25:
-            print("The burn was patchy — insufficient fuel to carry fire.")
+            self._log("The burn was patchy — insufficient fuel to carry fire.")
             shrub_red = random.uniform(5, 15)
             eco_impact = random.uniform(-5, 5)
         elif self.years_since_fire < 2:
-            print("Weak burn — fuel hadn't accumulated since the last fire.")
+            self._log("Weak burn — fuel hadn't accumulated since the last fire.")
             shrub_red = random.uniform(10, 20)
             eco_impact = random.uniform(-10, 0)
         elif random.random() < success_chance:
-            print("The prescribed burn was successful!")
+            self._log("The prescribed burn was successful!")
             shrub_red = random.uniform(20, 40)
             eco_impact = random.uniform(5, 15)
             if self.current_state is State.TRANSITION:
-                print("The fire effectively reduced woody vegetation.")
+                self._log("The fire effectively reduced woody vegetation.")
         else:
-            print("The burn was only partially successful.")
+            self._log("The burn was only partially successful.")
             shrub_red = random.uniform(10, 25)
             eco_impact = random.uniform(-5, 10)
 
         if deviation == 0:
-            print("\n✨ Perfect timing! Maximum ecological benefit.")
+            self._log("\n✨ Perfect timing! Maximum ecological benefit.")
             shrub_red *= 1.5
             eco_impact += 15
             if self.invasive_species and random.random() < 0.3:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
                 )
-                print(f"The well-timed fire controlled {removed.name}!")
+                self._log(f"The well-timed fire controlled {removed.name}!")
         elif deviation == 1:
-            print("Good timing — solid ecological benefits.")
+            self._log("Good timing — solid ecological benefits.")
             shrub_red *= 1.2
             eco_impact += 5
         elif deviation >= 3:
-            print("Suboptimal timing.")
+            self._log("Suboptimal timing.")
             shrub_red *= 0.7
             eco_impact -= 10
             if random.random() < 0.3:
@@ -403,29 +414,29 @@ class EcosystemAdventure:
         self.ecosystem_function = self.clamp(self.ecosystem_function + eco_impact)
 
         if density_msg:
-            print(density_msg)
+            self._log(density_msg)
 
         if pre_fire_biomass > 60 and fuel >= 25 and self.years_since_fire >= 2:
             div_boost = random.uniform(3, 8)
             self.grass_diversity = self.clamp(self.grass_diversity + div_boost)
-            print(f"  The fire reduced thatch and lifted diversity (+{div_boost:.1f}%).")
+            self._log(f"  The fire reduced thatch and lifted diversity (+{div_boost:.1f}%).")
         elif pre_fire_biomass < 30 and fuel >= 25:
             div_loss = random.uniform(1, 4)
             self.grass_diversity = self.clamp(self.grass_diversity - div_loss)
-            print(f"  Burning low-biomass grass hurt diversity (-{div_loss:.1f}%).")
+            self._log(f"  Burning low-biomass grass hurt diversity (-{div_loss:.1f}%).")
 
         self.years_since_fire = 0
 
-        print("Grasses will recover with vigour over the next few years.")
+        self._log("Grasses will recover with vigour over the next few years.")
         sign = "+" if eco_impact >= 0 else ""
-        print(f"Ecosystem function change: {sign}{eco_impact:.1f}%")
+        self._log(f"Ecosystem function change: {sign}{eco_impact:.1f}%")
 
         if (not self.hard_mode
                 and self.year > 5
                 and deviation > 2
                 and random.random() < 0.3):
             direction = "sooner" if self.years_since_fire > self.optimal_fire_interval else "later"
-            print(f"\nA local ecologist hints the fire would have helped more "
+            self._log(f"\nA local ecologist hints the fire would have helped more "
                   f"if conducted {direction}.")
 
         self.pause()
@@ -439,23 +450,23 @@ class EcosystemAdventure:
         ("Rotational grazing system", 25, 35),
     ]
 
-    def adjust_grazing(self) -> None:
-        print("\n=== ADJUST GRAZING PRESSURE ===")
-        print(f"Current grazing pressure: {self.grazing_pressure:.1f}%\n")
-        for i, (label, cost, _) in enumerate(self.GRAZING_OPTIONS, 1):
-            cost_str = f"💰 ${cost}" if cost else "Free"
-            print(f"{i}. {label} - {cost_str}")
-        cancel = len(self.GRAZING_OPTIONS) + 1
-        print(f"{cancel}. Cancel")
-
-        choice = self.prompt_int(
-            f"\nEnter your choice (1-{cancel}): ",
-            range(1, cancel + 1),
-        )
-        if choice is None or choice == cancel:
-            print("No changes made.")
-            self.pause()
-            return
+    def adjust_grazing(self, choice: Optional[int] = None) -> None:
+        if choice is None:
+            self._log("\n=== ADJUST GRAZING PRESSURE ===")
+            self._log(f"Current grazing pressure: {self.grazing_pressure:.1f}%\n")
+            for i, (label, cost, _) in enumerate(self.GRAZING_OPTIONS, 1):
+                cost_str = f"💰 ${cost}" if cost else "Free"
+                self._log(f"{i}. {label} - {cost_str}")
+            cancel = len(self.GRAZING_OPTIONS) + 1
+            self._log(f"{cancel}. Cancel")
+            choice = self.prompt_int(
+                f"\nEnter your choice (1-{cancel}): ",
+                range(1, cancel + 1),
+            )
+            if choice is None or choice == cancel:
+                self._log("No changes made.")
+                self.pause()
+                return
 
         label, cost, intensity = self.GRAZING_OPTIONS[choice - 1]
 
@@ -467,20 +478,20 @@ class EcosystemAdventure:
             self._apply_rotational_grazing()
         else:
             self.grazing_pressure = intensity
-            print(f"{label} applied.")
+            self._log(f"{label} applied.")
 
             if intensity == 0:
                 self.grass_cover = self.clamp(self.grass_cover + random.uniform(2, 5))
             elif intensity >= 60:
                 invasive_chance = 0.2 if intensity == 60 else 0.4
                 if random.random() < invasive_chance:
-                    print("Heavy grazing has favoured invasive species.")
+                    self._log("Heavy grazing has favoured invasive species.")
                     self.introduce_invasive_species()
 
             if intensity >= 80:
                 hit = random.uniform(5, 15)
                 self.ecosystem_function = self.clamp(self.ecosystem_function - hit)
-                print(f"Intense grazing reduced ecosystem function by {hit:.1f}%.")
+                self._log(f"Intense grazing reduced ecosystem function by {hit:.1f}%.")
 
         self.pause()
 
@@ -494,8 +505,8 @@ class EcosystemAdventure:
             div_d = random.uniform(4, 10)
             eco_d = random.uniform(8, 18)
             biomass_d = random.uniform(15, 30)
-            print("Rotational grazing succeeded brilliantly!")
-            print(f"  Cover +{grass_d:.1f}%, diversity +{div_d:.1f}%, "
+            self._log("Rotational grazing succeeded brilliantly!")
+            self._log(f"  Cover +{grass_d:.1f}%, diversity +{div_d:.1f}%, "
                   f"function +{eco_d:.1f}%, biomass −{biomass_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             self.grass_diversity = self.clamp(self.grass_diversity + div_d)
@@ -504,77 +515,77 @@ class EcosystemAdventure:
             if self.invasive_species and random.random() < 0.3:
                 target = random.choice(self.invasive_species)
                 target.strength *= 0.7
-                print(f"  Strategic grazing weakened {target.name}.")
+                self._log(f"  Strategic grazing weakened {target.name}.")
         elif roll < suitability:
             self.grazing_pressure = 35
             grass_d = random.uniform(0, 7)
             div_d = random.uniform(1, 4)
             eco_d = random.uniform(3, 10)
-            print("Rotational grazing is working as expected.")
-            print(f"  Cover +{grass_d:.1f}%, diversity +{div_d:.1f}%, "
+            self._log("Rotational grazing is working as expected.")
+            self._log(f"  Cover +{grass_d:.1f}%, diversity +{div_d:.1f}%, "
                   f"function +{eco_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             self.grass_diversity = self.clamp(self.grass_diversity + div_d)
             self.ecosystem_function = self.clamp(self.ecosystem_function + eco_d)
         else:
             self.grazing_pressure = 45
-            print("Rotational grazing faces implementation challenges.")
+            self._log("Rotational grazing faces implementation challenges.")
             if self.grass_biomass < 25:
-                print("  Insufficient biomass — there isn't enough to redistribute.")
+                self._log("  Insufficient biomass — there isn't enough to redistribute.")
             self.grass_cover = self.clamp(self.grass_cover + random.uniform(-5, 5))
             self.ecosystem_function = self.clamp(
                 self.ecosystem_function + random.uniform(-5, 8)
             )
 
-    def remove_shrubs(self) -> None:
-        print("\n=== SHRUB REMOVAL OPTIONS ===")
-        print("1. Selective hand removal (Removes 10%)   - 💰 $10")
-        print("2. Mechanical clearing   (Removes 30%)    - 💰 $25")
-        print("3. Herbicide application (Removes 50%)    - 💰 $35")
-        print("4. Integrated management approach         - 💰 $45")
-        print("5. Cancel")
-
-        choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
-        if choice is None or choice == 5:
-            print("No changes made.")
-            self.pause()
-            return
+    def remove_shrubs(self, choice: Optional[int] = None) -> None:
+        if choice is None:
+            self._log("\n=== SHRUB REMOVAL OPTIONS ===")
+            self._log("1. Selective hand removal (Removes 10%)   - 💰 $10")
+            self._log("2. Mechanical clearing   (Removes 30%)    - 💰 $25")
+            self._log("3. Herbicide application (Removes 50%)    - 💰 $35")
+            self._log("4. Integrated management approach         - 💰 $45")
+            self._log("5. Cancel")
+            choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
+            if choice is None or choice == 5:
+                self._log("No changes made.")
+                self.pause()
+                return
 
         if choice == 1:
             if not self.spend(10):
                 self.pause(); return
             self.shrub_density = self.clamp(self.shrub_density - 10)
-            print("Selective removal completed. Shrub density reduced by 10%.")
+            self._log("Selective removal completed. Shrub density reduced by 10%.")
             if self.invasive_species and random.random() < 0.2:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
                 )
-                print(f"Your careful work also removed some {removed.name}!")
+                self._log(f"Your careful work also removed some {removed.name}!")
 
         elif choice == 2:
             if not self.spend(25):
                 self.pause(); return
             self.shrub_density = self.clamp(self.shrub_density - 30)
             if random.random() < 0.15:
-                print("Soil disturbance has created opportunities for invasive species.")
+                self._log("Soil disturbance has created opportunities for invasive species.")
                 self.introduce_invasive_species()
             else:
-                print("Mechanical clearing completed. Shrub density reduced by 30%.")
+                self._log("Mechanical clearing completed. Shrub density reduced by 30%.")
 
         elif choice == 3:
             if not self.spend(35):
                 self.pause(); return
             self.shrub_density = self.clamp(self.shrub_density - 50)
             self.ecosystem_function = self.clamp(self.ecosystem_function - 20)
-            print("Herbicide applied. Shrubs -50%, ecosystem function -20%.")
+            self._log("Herbicide applied. Shrubs -50%, ecosystem function -20%.")
             if random.random() < 0.2:
-                print("⚠️ The herbicide had unexpected consequences!")
+                self._log("⚠️ The herbicide had unexpected consequences!")
                 if random.random() < 0.5:
                     loss = random.uniform(10, 20)
                     self.grass_cover = self.clamp(self.grass_cover - loss)
-                    print(f"Native grasses were also affected (-{loss:.1f}%).")
+                    self._log(f"Native grasses were also affected (-{loss:.1f}%).")
                 else:
-                    print("The disturbance opened the door to invaders.")
+                    self._log("The disturbance opened the door to invaders.")
                     self.introduce_invasive_species()
 
         elif choice == 4:
@@ -585,31 +596,31 @@ class EcosystemAdventure:
         self.pause()
 
     def _apply_integrated_shrub_management(self) -> None:
-        print("Implementing integrated management approach...")
+        self._log("Implementing integrated management approach...")
         roll = random.random()
         if roll > 0.7:
             shrub_red = random.uniform(40, 60)
             eco = random.uniform(5, 15)
-            print(f"Very successful! Shrubs -{shrub_red:.1f}%, "
+            self._log(f"Very successful! Shrubs -{shrub_red:.1f}%, "
                   f"ecosystem function +{eco:.1f}%.")
             if self.invasive_species and random.random() < 0.4:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
                 )
-                print(f"The integrated approach also controlled {removed.name}!")
+                self._log(f"The integrated approach also controlled {removed.name}!")
         elif roll > 0.3:
             shrub_red = random.uniform(20, 40)
             eco = random.uniform(-5, 10)
             sign = "+" if eco >= 0 else ""
-            print(f"Moderately successful. Shrubs -{shrub_red:.1f}%, "
+            self._log(f"Moderately successful. Shrubs -{shrub_red:.1f}%, "
                   f"ecosystem function {sign}{eco:.1f}%.")
         else:
             shrub_red = random.uniform(5, 20)
             eco = random.uniform(-15, 0)
-            print(f"Limited success. Shrubs -{shrub_red:.1f}%, "
+            self._log(f"Limited success. Shrubs -{shrub_red:.1f}%, "
                   f"ecosystem function {eco:.1f}%.")
             if random.random() < 0.3:
-                print("The disturbance opened the door to invaders.")
+                self._log("The disturbance opened the door to invaders.")
                 self.introduce_invasive_species()
 
         self.shrub_density = self.clamp(self.shrub_density - shrub_red)
@@ -621,18 +632,18 @@ class EcosystemAdventure:
         ("Intensive reseeding (+40%)", 50, 40, 0.2),
     ]
 
-    def reseed_grasses(self) -> None:
-        print("\n=== GRASS RESEEDING OPTIONS ===")
-        for i, (label, cost, _, _) in enumerate(self.RESEED_OPTIONS, 1):
-            print(f"{i}. {label} - 💰 ${cost}")
-        print("4. Experimental native seed mix - 💰 $40")
-        print("5. Cancel")
-
-        choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
-        if choice is None or choice == 5:
-            print("No changes made.")
-            self.pause()
-            return
+    def reseed_grasses(self, choice: Optional[int] = None) -> None:
+        if choice is None:
+            self._log("\n=== GRASS RESEEDING OPTIONS ===")
+            for i, (label, cost, _, _) in enumerate(self.RESEED_OPTIONS, 1):
+                self._log(f"{i}. {label} - 💰 ${cost}")
+            self._log("4. Experimental native seed mix - 💰 $40")
+            self._log("5. Cancel")
+            choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
+            if choice is None or choice == 5:
+                self._log("No changes made.")
+                self.pause()
+                return
 
         if choice in (1, 2, 3):
             label, cost, gain, risk = self.RESEED_OPTIONS[choice - 1]
@@ -642,9 +653,9 @@ class EcosystemAdventure:
             self.grass_diversity = self.clamp(
                 self.grass_diversity + gain * 0.15
             )
-            print(f"{label} completed. Grass cover increased by {gain}%.")
+            self._log(f"{label} completed. Grass cover increased by {gain}%.")
             if risk and random.random() < risk:
-                print("⚠️ The seed mix appears to have been contaminated.")
+                self._log("⚠️ The seed mix appears to have been contaminated.")
                 self.introduce_invasive_species()
         else:
             if not self.spend(40):
@@ -654,13 +665,13 @@ class EcosystemAdventure:
         self.pause()
 
     def _apply_experimental_seed_mix(self) -> None:
-        print("Applying experimental native seed mix...")
+        self._log("Applying experimental native seed mix...")
         roll = random.random()
         if roll > 0.7:
             grass_d = random.uniform(40, 60)
             eco_d = random.uniform(10, 20)
             div_d = random.uniform(8, 15)
-            print(f"Thrived! Cover +{grass_d:.1f}%, function +{eco_d:.1f}%, "
+            self._log(f"Thrived! Cover +{grass_d:.1f}%, function +{eco_d:.1f}%, "
                   f"diversity +{div_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             self.grass_diversity = self.clamp(self.grass_diversity + div_d)
@@ -669,20 +680,20 @@ class EcosystemAdventure:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
                 )
-                print(f"The diverse native mix outcompeted {removed.name}!")
+                self._log(f"The diverse native mix outcompeted {removed.name}!")
         elif roll > 0.3:
             grass_d = random.uniform(20, 40)
             div_d = random.uniform(3, 8)
-            print(f"Established moderately. Cover +{grass_d:.1f}%, "
+            self._log(f"Established moderately. Cover +{grass_d:.1f}%, "
                   f"diversity +{div_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             self.grass_diversity = self.clamp(self.grass_diversity + div_d)
         else:
             grass_d = random.uniform(0, 15)
-            print(f"Struggled to establish. Cover +{grass_d:.1f}%.")
+            self._log(f"Struggled to establish. Cover +{grass_d:.1f}%.")
             self.grass_cover = self.clamp(self.grass_cover + grass_d)
             if random.random() < 0.5:
-                print("The failed seeding created opportunities for invaders.")
+                self._log("The failed seeding created opportunities for invaders.")
                 self.introduce_invasive_species()
 
     def introduce_invasive_species(self) -> None:
@@ -693,8 +704,8 @@ class EcosystemAdventure:
             return
         new = Invasive(name=name, effect=effect, strength=random.uniform(lo, hi))
         self.invasive_species.append(new)
-        print(f"\n⚠️ ALERT: {new.name} has been detected in your ecosystem!")
-        print("This invasive species will affect management outcomes.")
+        self._log(f"\n⚠️ ALERT: {new.name} has been detected in your ecosystem!")
+        self._log("This invasive species will affect management outcomes.")
         self.pause()
 
     def apply_invasive_effects(self) -> None:
@@ -713,21 +724,21 @@ class EcosystemAdventure:
     def _effect_grass_competitor(self, sp: Invasive) -> None:
         self.grass_biomass = self.clamp(self.grass_biomass + 6 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 7 * sp.strength)
-        print(f"  • {sp.name} forms dominant tussocks — biomass climbs while "
+        self._log(f"  • {sp.name} forms dominant tussocks — biomass climbs while "
               f"natives are excluded.")
 
     def _effect_allelopathic(self, sp: Invasive) -> None:
         self.grass_diversity = self.clamp(self.grass_diversity - 7 * sp.strength)
         self.grass_cover = self.clamp(self.grass_cover - 2 * sp.strength)
         self.ecosystem_function = self.clamp(self.ecosystem_function - 4 * sp.strength)
-        print(f"  • {sp.name} releases allelopathic toxins — diversity falls "
+        self._log(f"  • {sp.name} releases allelopathic toxins — diversity falls "
               f"and livestock health suffers.")
 
     def _effect_nitrogen_fixer(self, sp: Invasive) -> None:
         self.shrub_density = self.clamp(self.shrub_density + 6 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 3 * sp.strength)
         self.ecosystem_function = self.clamp(self.ecosystem_function - 2 * sp.strength)
-        print(f"  • {sp.name} is establishing woody dominance — soil N "
+        self._log(f"  • {sp.name} is establishing woody dominance — soil N "
               f"enrichment favours further woody invasion.")
 
     def _effect_rapid_growth(self, sp: Invasive) -> None:
@@ -735,43 +746,46 @@ class EcosystemAdventure:
         self.grass_biomass = self.clamp(self.grass_biomass + 8 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 8 * sp.strength)
         self.ecosystem_function = self.clamp(self.ecosystem_function - 3 * sp.strength)
-        print(f"  • {sp.name} is spreading laterally — biomass surges, "
+        self._log(f"  • {sp.name} is spreading laterally — biomass surges, "
               f"natives crowded out.")
 
     def _effect_shade_creator(self, sp: Invasive) -> None:
         self.shrub_density = self.clamp(self.shrub_density + 8 * sp.strength)
         self.grass_cover = self.clamp(self.grass_cover - 5 * sp.strength)
         self.grass_diversity = self.clamp(self.grass_diversity - 5 * sp.strength)
-        print(f"  • {sp.name} is forming dense thickets — shrub cover "
+        self._log(f"  • {sp.name} is forming dense thickets — shrub cover "
               f"building rapidly.")
 
-    def manage_invasive_species(self) -> None:
+    def manage_invasive_species(
+        self,
+        choice: Optional[int] = None,
+        target_idx: Optional[int] = None,
+    ) -> None:
         if not self.invasive_species:
-            print("\nThere are currently no invasive species in your ecosystem.")
+            self._log("\nThere are currently no invasive species in your ecosystem.")
             self.pause()
             return
 
-        print("\n=== INVASIVE SPECIES MANAGEMENT ===")
-        print("Currently present:")
-        for i, sp in enumerate(self.invasive_species, 1):
-            print(f"  {i}. {sp.name} — Impact: {int(sp.strength * 100)}%")
-
-        print("\nManagement options:")
-        print("1. Targeted removal             - 💰 $25  (60% success on chosen species)")
-        print("2. Biocontrol introduction      - 💰 $40  (unpredictable)")
-        print("3. Comprehensive management     - 💰 $50  (expensive but effective)")
-        print("4. Targeted/conservation grazing- 💰 $30  (suppresses palatable invaders)")
-        print("5. Cancel")
-
-        choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
-        if choice is None or choice == 5:
-            print("No changes made.")
-            self.pause()
-            return
+        if choice is None:
+            self._log("\n=== INVASIVE SPECIES MANAGEMENT ===")
+            self._log("Currently present:")
+            for i, sp in enumerate(self.invasive_species, 1):
+                self._log(f"  {i}. {sp.name} — Impact: {int(sp.strength * 100)}%")
+            self._log("\nManagement options:")
+            self._log("1. Targeted removal             - 💰 $25  (60% success on chosen species)")
+            self._log("2. Biocontrol introduction      - 💰 $40  (unpredictable)")
+            self._log("3. Comprehensive management     - 💰 $50  (expensive but effective)")
+            self._log("4. Targeted/conservation grazing- 💰 $30  (suppresses palatable invaders)")
+            self._log("5. Cancel")
+            choice = self.prompt_int("\nEnter your choice (1-5): ", range(1, 6))
+            if choice is None or choice == 5:
+                self._log("No changes made.")
+                self.pause()
+                return
 
         if choice == 1:
             if self.spend(25):
-                self._targeted_removal()
+                self._targeted_removal(target_idx=target_idx)
         elif choice == 2:
             if self.spend(40):
                 self._biocontrol()
@@ -784,39 +798,42 @@ class EcosystemAdventure:
                 for sp in self.invasive_species
             )
             if not grazable_present:
-                print("\nNone of your current invaders respond to grazing.")
-                print("(Woody/unpalatable species need different management.)")
+                self._log("\nNone of your current invaders respond to grazing.")
+                self._log("(Woody/unpalatable species need different management.)")
             elif self.spend(30):
                 self._targeted_grazing()
 
         self.pause()
 
-    def _targeted_removal(self) -> None:
-        idx = self.prompt_int(
-            f"Which species do you want to target? (1-{len(self.invasive_species)}): ",
-            range(1, len(self.invasive_species) + 1),
-        )
-        if idx is None:
-            print("Invalid selection.")
-            return
+    def _targeted_removal(self, target_idx: Optional[int] = None) -> None:
+        if target_idx is None:
+            idx = self.prompt_int(
+                f"Which species do you want to target? (1-{len(self.invasive_species)}): ",
+                range(1, len(self.invasive_species) + 1),
+            )
+            if idx is None:
+                self._log("Invalid selection.")
+                return
+        else:
+            idx = target_idx
 
         target = self.invasive_species[idx - 1]
-        print(f"Attempting to remove {target.name}...")
+        self._log(f"Attempting to remove {target.name}...")
 
         if random.random() < 0.6:
             self.invasive_species.pop(idx - 1)
-            print(f"Success! You've effectively controlled {target.name}.")
+            self._log(f"Success! You've effectively controlled {target.name}.")
             self.ecosystem_function = self.clamp(
                 self.ecosystem_function + random.uniform(5, 10)
             )
         else:
-            print(f"Despite your efforts, {target.name} persists.")
+            self._log(f"Despite your efforts, {target.name} persists.")
             if random.random() < 0.3:
                 target.strength = min(0.5, target.strength * 1.2)
-                print("⚠️ The species has adapted and become more resilient!")
+                self._log("⚠️ The species has adapted and become more resilient!")
 
     def _biocontrol(self) -> None:
-        print("Introducing biocontrol agents...")
+        self._log("Introducing biocontrol agents...")
         outcome = random.random()
         if outcome > 0.7:
             removed_count = min(len(self.invasive_species), random.randint(1, 2))
@@ -824,18 +841,18 @@ class EcosystemAdventure:
                 removed = self.invasive_species.pop(
                     random.randrange(len(self.invasive_species))
                 )
-                print(f"The biocontrol successfully managed {removed.name}!")
+                self._log(f"The biocontrol successfully managed {removed.name}!")
             self.ecosystem_function = self.clamp(
                 self.ecosystem_function + random.uniform(5, 15)
             )
         elif outcome > 0.4:
             for sp in self.invasive_species:
                 sp.strength *= 0.7
-            print("Biocontrol agents have weakened, but not eliminated, invaders.")
+            self._log("Biocontrol agents have weakened, but not eliminated, invaders.")
         elif outcome > 0.1:
-            print("The biocontrol agents failed to establish.")
+            self._log("The biocontrol agents failed to establish.")
         else:
-            print("⚠️ The biocontrol agents themselves have become invasive!")
+            self._log("⚠️ The biocontrol agents themselves have become invasive!")
             self.ecosystem_function = self.clamp(
                 self.ecosystem_function - random.uniform(10, 20)
             )
@@ -856,7 +873,7 @@ class EcosystemAdventure:
                      "reverse established shrubland.")
 
     def _comprehensive_plan(self) -> None:
-        print("Implementing comprehensive invasive species management plan...")
+        self._log("Implementing comprehensive invasive species management plan...")
         success_rate = min(0.9, 0.7 + (self.ecosystem_function / 200))
 
         removed_count = 0
@@ -870,13 +887,13 @@ class EcosystemAdventure:
                 weakened_count += 1
 
         if removed_count:
-            print(f"Successfully removed {removed_count} invasive species!")
+            self._log(f"Successfully removed {removed_count} invasive species!")
         if weakened_count:
-            print(f"Weakened the impact of {weakened_count} invasive species.")
+            self._log(f"Weakened the impact of {weakened_count} invasive species.")
 
         boost = random.uniform(5, 15)
         self.ecosystem_function = self.clamp(self.ecosystem_function + boost)
-        print(f"The comprehensive approach improved ecosystem function by {boost:.1f}%.")
+        self._log(f"The comprehensive approach improved ecosystem function by {boost:.1f}%.")
 
     def _targeted_grazing(self) -> None:
         type_effectiveness = {
@@ -891,7 +908,7 @@ class EcosystemAdventure:
         non_grazable = [sp for sp in self.invasive_species
                         if sp.effect not in GRAZABLE_INVASIVE_EFFECTS]
 
-        print("\nDeploying livestock for targeted weed control...")
+        self._log("\nDeploying livestock for targeted weed control...")
 
         eliminated: list[Invasive] = []
         for sp in grazable:
@@ -899,28 +916,28 @@ class EcosystemAdventure:
             reduction = random.uniform(lo, hi)
             old_strength = sp.strength
             sp.strength *= (1 - reduction)
-            print(f"  • {sp.name}: impact {int(old_strength * 100)}% "
+            self._log(f"  • {sp.name}: impact {int(old_strength * 100)}% "
                   f"→ {int(sp.strength * 100)}%")
             if sp.strength < 0.05:
                 eliminated.append(sp)
 
         for sp in eliminated:
             self.invasive_species.remove(sp)
-            print(f"    ✓ {sp.name} effectively controlled!")
+            self._log(f"    ✓ {sp.name} effectively controlled!")
 
         biomass_removed = random.uniform(8, 18)
         self.grass_biomass = self.clamp(self.grass_biomass - biomass_removed)
-        print(f"  Grass biomass −{biomass_removed:.1f}% (eaten by livestock).")
+        self._log(f"  Grass biomass −{biomass_removed:.1f}% (eaten by livestock).")
 
         if self.grass_cover > 30 and self.grass_diversity > 25:
             div_boost = random.uniform(2, 5)
             self.grass_diversity = self.clamp(self.grass_diversity + div_boost)
-            print(f"  Native species responding to released niches "
+            self._log(f"  Native species responding to released niches "
                   f"(+{div_boost:.1f}% diversity).")
 
         if non_grazable:
             names = ", ".join(sp.name for sp in non_grazable)
-            print(f"  Unaffected (woody/unpalatable): {names}.")
+            self._log(f"  Unaffected (woody/unpalatable): {names}.")
 
     def simulate_year(self) -> None:
         self.year += 1
@@ -950,12 +967,12 @@ class EcosystemAdventure:
                   "Shrub density     ", "Ecosystem function"]
         new = (self.grass_cover, self.grass_biomass, self.grass_diversity,
                self.shrub_density, self.ecosystem_function)
-        print(f"\nYear {self.year} changes:")
+        self._log(f"\nYear {self.year} changes:")
         for label, before, after in zip(labels, old, new):
-            print(f"  {label}: {before:5.1f}% → {after:5.1f}%")
-        print(f"  Years since fire:   {self.years_since_fire}")
+            self._log(f"  {label}: {before:5.1f}% → {after:5.1f}%")
+        self._log(f"  Years since fire:   {self.years_since_fire}")
         if self.hard_mode:
-            print(f"  (Annual budget +${self.ANNUAL_BUDGET}, now ${self.budget})")
+            self._log(f"  (Annual budget +${self.ANNUAL_BUDGET}, now ${self.budget})")
 
         self._maybe_introduce_invasive()
         self._random_event()
@@ -1107,8 +1124,8 @@ class EcosystemAdventure:
             return
 
         name, desc, effects = chosen
-        print(f"\n⚠️ ECOLOGICAL EVENT: {name} ⚠️")
-        print(desc)
+        self._log(f"\n⚠️ ECOLOGICAL EVENT: {name} ⚠️")
+        self._log(desc)
 
         is_lightning_fire = (name == "Lightning Fire")
         density_msg_to_print = ""
@@ -1131,15 +1148,15 @@ class EcosystemAdventure:
 
             new_val = self.clamp(old_val + delta)
             setattr(self, attr, new_val)
-            print(f"  {label}: {old_val:.1f}% → {new_val:.1f}%")
+            self._log(f"  {label}: {old_val:.1f}% → {new_val:.1f}%")
 
         if density_msg_to_print:
-            print(density_msg_to_print)
+            self._log(density_msg_to_print)
 
         if effects.get("fire_reset"):
             self.years_since_fire = 0
             self.grass_biomass = self.clamp(self.grass_biomass * 0.2)
-            print("  Fire history reset; biomass consumed.")
+            self._log("  Fire history reset; biomass consumed.")
 
         if name == "Drought":
             self.grass_biomass = self.clamp(self.grass_biomass - random.uniform(10, 20))
@@ -1147,12 +1164,12 @@ class EcosystemAdventure:
             self.grass_biomass = self.clamp(self.grass_biomass + random.uniform(8, 15))
 
         if name == "Drought" and random.random() < 0.3:
-            print("The drought has favoured invasive species.")
+            self._log("The drought has favoured invasive species.")
             self.introduce_invasive_species()
         elif name == "Wet Year" and self.invasive_species and random.random() < 0.3:
             target = random.choice(self.invasive_species)
             target.strength = min(0.5, target.strength * 1.3)
-            print(f"The wet conditions caused a {target.name} population boom!")
+            self._log(f"The wet conditions caused a {target.name} population boom!")
 
         self.pause()
 
@@ -1171,20 +1188,20 @@ class EcosystemAdventure:
                 f"Year {self.year}: Transition from {previous.value} to {self.current_state.value}"
             )
             if self.current_state is State.SHRUBLAND:
-                print("\n🌳 THRESHOLD CROSSED: shrub-dominated state reached.")
-                print("This will be difficult to reverse without significant intervention.")
+                self._log("\n🌳 THRESHOLD CROSSED: shrub-dominated state reached.")
+                self._log("This will be difficult to reverse without significant intervention.")
                 self.pause()
             elif self.current_state is State.GRASSLAND:
-                print("\n🌿 THRESHOLD CROSSED: ecosystem has recovered to grassland.")
+                self._log("\n🌿 THRESHOLD CROSSED: ecosystem has recovered to grassland.")
                 self.pause()
 
     def _show_final_summary(self) -> None:
         self.clear_screen()
 
         if self.year >= self.GAME_LENGTH:
-            print("\n🎉 Congratulations! You've managed the ecosystem for 30 years!\n")
+            self._log("\n🎉 Congratulations! You've managed the ecosystem for 30 years!\n")
         elif self.ecosystem_function <= 0:
-            print("\n💀 GAME OVER: the ecosystem collapsed under your watch.\n")
+            self._log("\n💀 GAME OVER: the ecosystem collapsed under your watch.\n")
 
         endings = {
             State.GRASSLAND: ("You've maintained a healthy GRASSLAND ecosystem!",
@@ -1195,29 +1212,29 @@ class EcosystemAdventure:
                                "Woody plants have taken over what was once grassland."),
         }
         line1, line2 = endings[self.current_state]
-        print("Final ecosystem state:")
-        print(line1)
-        print(line2)
+        self._log("Final ecosystem state:")
+        self._log(line1)
+        self._log(line2)
 
-        print("\nFINAL STATISTICS:")
-        print(f"  Final grass cover:        {self.grass_cover:.1f}%")
-        print(f"  Final grass biomass:      {self.grass_biomass:.1f}%")
-        print(f"  Final grass diversity:    {self.grass_diversity:.1f}%")
-        print(f"  Final shrub density:      {self.shrub_density:.1f}%")
-        print(f"  Final ecosystem function: {self.ecosystem_function:.1f}%")
-        print(f"  State transitions:        {len(self.history)}")
+        self._log("\nFINAL STATISTICS:")
+        self._log(f"  Final grass cover:        {self.grass_cover:.1f}%")
+        self._log(f"  Final grass biomass:      {self.grass_biomass:.1f}%")
+        self._log(f"  Final grass diversity:    {self.grass_diversity:.1f}%")
+        self._log(f"  Final shrub density:      {self.shrub_density:.1f}%")
+        self._log(f"  Final ecosystem function: {self.ecosystem_function:.1f}%")
+        self._log(f"  State transitions:        {len(self.history)}")
         if self.invasive_species:
-            print(f"  Invasive species present: {len(self.invasive_species)}")
+            self._log(f"  Invasive species present: {len(self.invasive_species)}")
         else:
-            print("  No invasive species present - excellent management!")
+            self._log("  No invasive species present - excellent management!")
 
         score = self._compute_score()
-        print(f"\nFINAL SCORE: {score}/200")
-        print(f"RATING: {self._rating(score)}")
+        self._log(f"\nFINAL SCORE: {score}/200")
+        self._log(f"RATING: {self._rating(score)}")
 
-        print(f"\nFun fact: Your ecosystem's optimal fire interval was every "
+        self._log(f"\nFun fact: Your ecosystem's optimal fire interval was every "
               f"{self.optimal_fire_interval} years.")
-        print("\nTHANK YOU FOR PLAYING!")
+        self._log("\nTHANK YOU FOR PLAYING!")
         self.pause("\nPress Enter to exit...")
 
     def _compute_score(self) -> int:

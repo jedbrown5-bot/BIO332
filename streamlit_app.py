@@ -1,0 +1,452 @@
+"""Streamlit front-end for the Ecosystem Management: State & Transition Adventure."""
+
+from __future__ import annotations
+
+import streamlit as st
+
+from ecosystem_game import EcosystemAdventure, GRAZABLE_INVASIVE_EFFECTS, State
+
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Ecosystem Manager",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ── Session-state bootstrap ───────────────────────────────────────────────────
+
+def _init_state() -> None:
+    defaults = {
+        "game":     None,
+        "phase":    "intro",   # intro | main | sub_* | gameover
+        "submenu":  None,      # None | grazing | shrubs | reseed | invasive | inv_target
+        "log":      [],        # messages from the last completed turn
+        "prev":     {},        # metric values from the previous year (for delta display)
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+_init_state()
+
+# Convenience alias (re-bound after any rerun)
+game: EcosystemAdventure | None = st.session_state.game
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+STATE_COLOUR = {
+    State.GRASSLAND:  "🟢",
+    State.TRANSITION: "🟡",
+    State.SHRUBLAND:  "🔴",
+}
+
+METRIC_DEFS = [
+    ("Grass Cover",        "grass_cover",        "🌿"),
+    ("Grass Biomass",      "grass_biomass",       "🌾"),
+    ("Grass Diversity",    "grass_diversity",     "🌼"),
+    ("Shrub Density",      "shrub_density",       "🌳"),
+    ("Ecosystem Function", "ecosystem_function",  "🌱"),
+    ("Grazing Pressure",   "grazing_pressure",    "🐄"),
+]
+
+
+def _save_prev() -> None:
+    st.session_state.prev = {attr: getattr(game, attr) for _, attr, _ in METRIC_DEFS}
+
+
+def _delta(attr: str) -> str | None:
+    prev = st.session_state.prev.get(attr)
+    if prev is None:
+        return None
+    d = getattr(game, attr) - prev
+    return f"{'+' if d >= 0 else ''}{d:.1f}%"
+
+
+def _flush() -> list[str]:
+    """Collect and clear the game's message buffer."""
+    msgs = [m for m in game.messages if m.strip()]
+    game.messages.clear()
+    return msgs
+
+
+def _run(action_fn, *args, **kwargs) -> None:
+    """Call a management action, simulate the year, collect messages, rerun."""
+    game.messages.clear()
+    action_fn(*args, **kwargs)
+    if not game.game_over:
+        game.simulate_year()
+        game._check_end_conditions()
+    st.session_state.log = _flush()
+    st.session_state.submenu = None
+    _save_prev()
+    st.session_state.phase = "gameover" if game.game_over else "main"
+    st.rerun()
+
+
+# ── Status panel (left column) ────────────────────────────────────────────────
+
+def _render_status() -> None:
+    st.subheader("Ecosystem Status")
+
+    # Metrics with year-over-year delta
+    for label, attr, icon in METRIC_DEFS:
+        val  = getattr(game, attr)
+        delt = _delta(attr)
+
+        # Colour the ecosystem-function bar red when it's dangerously low
+        bar_val = min(val / 100.0, 1.0)
+        if attr == "ecosystem_function" and val < 25:
+            bar_colour = "red"
+        elif attr == "ecosystem_function" and val < 50:
+            bar_colour = "orange"
+        else:
+            bar_colour = "green" if attr != "shrub_density" else "red"
+
+        col_m, col_b = st.columns([2, 3])
+        with col_m:
+            st.metric(f"{icon} {label}", f"{val:.1f}%", delta=delt)
+        with col_b:
+            st.progress(bar_val)
+
+    st.caption(f"🔥 Years since last fire: {game.years_since_fire}")
+
+    # Active invasive species
+    if game.invasive_species:
+        st.error("⚠️ Active invasive species")
+        for sp in game.invasive_species:
+            st.markdown(f"&nbsp;&nbsp;**{sp.name}** — Impact: {int(sp.strength * 100)}%")
+
+    # Contextual hints (easy mode only)
+    if not game.hard_mode:
+        hints = game._diagnostic_hints()
+        if hints:
+            with st.expander("🔬 Field observations", expanded=True):
+                for h in hints:
+                    st.info(h)
+
+    # State-transition history
+    if game.history:
+        with st.expander("📜 State transition history"):
+            for h in game.history:
+                st.markdown(h)
+
+
+# ── Action panel (right column) ───────────────────────────────────────────────
+
+def _btn(label: str, key: str, disabled: bool = False) -> bool:
+    return st.button(label, key=key, use_container_width=True, disabled=disabled)
+
+
+def _render_main_menu() -> None:
+    st.subheader("Management Actions")
+
+    cost = lambda c: f" (${c})" if game.hard_mode else ""
+
+    if _btn(f"🔥 Prescribed Burn{cost(30)}", "burn"):
+        _run(game.conduct_prescribed_burn)
+
+    if _btn("🐄 Adjust Grazing", "grazing"):
+        st.session_state.submenu = "grazing"
+        st.rerun()
+
+    if _btn("🪓 Remove Shrubs", "shrubs"):
+        st.session_state.submenu = "shrubs"
+        st.rerun()
+
+    if _btn("🌱 Reseed Native Grasses", "reseed"):
+        st.session_state.submenu = "reseed"
+        st.rerun()
+
+    has_invasives = bool(game.invasive_species)
+    if _btn("🚫 Manage Invasive Species", "invasive", disabled=not has_invasives):
+        st.session_state.submenu = "invasive"
+        st.rerun()
+
+    st.divider()
+
+    if _btn("⏭️ Do Nothing (advance year)", "nothing"):
+        _run(game.do_nothing)
+
+
+def _back_btn(target: str | None = None) -> None:
+    if _btn("← Back", "back"):
+        st.session_state.submenu = target
+        st.rerun()
+
+
+def _render_grazing_menu() -> None:
+    st.subheader("Adjust Grazing Pressure")
+    st.caption(f"Current: {game.grazing_pressure:.1f}%")
+
+    options = [
+        (1, "Remove all livestock (0%)",    0),
+        (2, "Light grazing (20%)",           0),
+        (3, "Moderate grazing (40%)",        0),
+        (4, "Heavy grazing (60%)",           0),
+        (5, "Very heavy grazing (80%)",      0),
+        (6, "Rotational grazing system",    25),
+    ]
+    for idx, label, cost in options:
+        cost_str = f" (${cost})" if cost and game.hard_mode else ""
+        if _btn(f"{label}{cost_str}", f"g{idx}"):
+            _run(game.adjust_grazing, choice=idx)
+
+    _back_btn()
+
+
+def _render_shrubs_menu() -> None:
+    st.subheader("Remove Shrubs")
+
+    options = [
+        (1, "Selective hand removal  (−10%)",  10),
+        (2, "Mechanical clearing     (−30%)",  25),
+        (3, "Herbicide application   (−50%)",  35),
+        (4, "Integrated management",           45),
+    ]
+    for idx, label, cost in options:
+        cost_str = f" (${cost})" if game.hard_mode else ""
+        if _btn(f"{label}{cost_str}", f"s{idx}"):
+            _run(game.remove_shrubs, choice=idx)
+
+    _back_btn()
+
+
+def _render_reseed_menu() -> None:
+    st.subheader("Reseed Native Grasses")
+
+    options = [
+        (1, "Minimal reseeding   (+10%)",   15),
+        (2, "Moderate reseeding  (+25%)",   30),
+        (3, "Intensive reseeding (+40%)",   50),
+        (4, "Experimental native seed mix", 40),
+    ]
+    for idx, label, cost in options:
+        cost_str = f" (${cost})" if game.hard_mode else ""
+        if _btn(f"{label}{cost_str}", f"r{idx}"):
+            _run(game.reseed_grasses, choice=idx)
+
+    _back_btn()
+
+
+def _render_invasive_menu() -> None:
+    st.subheader("Invasive Species Management")
+
+    grazable = any(sp.effect in GRAZABLE_INVASIVE_EFFECTS for sp in game.invasive_species)
+
+    options = [
+        (1, "Targeted removal",              25),
+        (2, "Biocontrol introduction",       40),
+        (3, "Comprehensive management",      50),
+        (4, "Targeted/conservation grazing", 30, not grazable),
+    ]
+    for row in options:
+        idx, label, cost = row[0], row[1], row[2]
+        disabled = row[3] if len(row) > 3 else False
+        cost_str = f" (${cost})" if game.hard_mode else ""
+
+        if idx == 1:
+            # Targeted removal needs a species picker — go to sub-sub-menu
+            if _btn(f"{label}{cost_str}", f"i{idx}", disabled=disabled):
+                st.session_state.submenu = "inv_target"
+                st.rerun()
+        else:
+            if _btn(f"{label}{cost_str}", f"i{idx}", disabled=disabled):
+                _run(game.manage_invasive_species, choice=idx)
+
+    if not grazable:
+        st.caption("Grazing option disabled — no palatable invaders currently present.")
+
+    _back_btn()
+
+
+def _render_inv_target_menu() -> None:
+    st.subheader("Select Target Species")
+
+    for i, sp in enumerate(game.invasive_species, 1):
+        label = f"{sp.name}  (Impact: {int(sp.strength * 100)}%)"
+        if _btn(label, f"t{i}"):
+            _run(game.manage_invasive_species, choice=1, target_idx=i)
+
+    _back_btn(target="invasive")
+
+
+SUBMENU_RENDERERS = {
+    "grazing":    _render_grazing_menu,
+    "shrubs":     _render_shrubs_menu,
+    "reseed":     _render_reseed_menu,
+    "invasive":   _render_invasive_menu,
+    "inv_target": _render_inv_target_menu,
+}
+
+
+# ── Event log (below main columns) ───────────────────────────────────────────
+
+def _render_log() -> None:
+    if not st.session_state.log:
+        return
+    year_shown = max(1, game.year - 1)
+    with st.expander(f"📋 Year {year_shown} events", expanded=True):
+        for msg in st.session_state.log:
+            if msg.strip():
+                st.markdown(msg)
+
+
+# ── Score helpers ─────────────────────────────────────────────────────────────
+
+def _score_bar(score: int) -> None:
+    stars = min(5, max(0, score // 40))
+    st.markdown("★" * stars + "☆" * (5 - stars))
+
+
+# ── Pages ─────────────────────────────────────────────────────────────────────
+
+def _page_intro() -> None:
+    st.title("🌿 Ecosystem Management")
+    st.subheader("State & Transition Adventure")
+
+    st.markdown("""
+    You are managing a grassland ecosystem that can exist in **multiple stable states**.
+    Your goal: restore and maintain a healthy grassland over **30 years**.
+
+    The grass community is tracked in three dimensions:
+    | Dimension | What it measures |
+    |---|---|
+    | **Cover** | Structural presence of grass on the ground |
+    | **Biomass** | Standing crop and litter — the fire fuel load |
+    | **Diversity** | Species richness of the grass community |
+
+    Productive grassland with no disturbance accumulates biomass, which suppresses
+    diversity and ecosystem function.  Both **fire** and **appropriate grazing**
+    are needed to keep the system open and diverse.
+
+    > ⚠️ You begin in a **degraded, shrub-encroached state** — restoration is the challenge.
+    """)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info("""
+        **Easy mode**
+        - Field observations and ecologist tips
+        - No budget constraint
+        - Focus on the ecology
+        """)
+    with col2:
+        st.warning(f"""
+        **Hard mode**
+        - No hints
+        - Tight management budget (start ${EcosystemAdventure.STARTING_BUDGET},
+          +${EcosystemAdventure.ANNUAL_BUDGET}/yr)
+        - Every dollar matters
+        """)
+
+    difficulty = st.radio("Choose difficulty", ["Easy", "Hard"], horizontal=True)
+
+    if st.button("🌱 Start Game", type="primary", use_container_width=True):
+        g = EcosystemAdventure()
+        g.headless  = True
+        g.hard_mode = (difficulty == "Hard")
+        st.session_state.game  = g
+        st.session_state.log   = []
+        st.session_state.phase = "main"
+        _save_prev()  # need game bound for _save_prev
+        st.rerun()
+
+
+def _page_main() -> None:
+    icon  = STATE_COLOUR.get(game.current_state, "⚪")
+    title = f"{icon} Year {game.year} / {game.GAME_LENGTH}  —  {game.current_state.value}"
+
+    if game.hard_mode:
+        title += f"  |  Budget: ${game.budget}"
+
+    st.title(title)
+
+    left, right = st.columns([3, 2], gap="large")
+
+    with left:
+        _render_status()
+
+    with right:
+        submenu = st.session_state.submenu
+        renderer = SUBMENU_RENDERERS.get(submenu, _render_main_menu)
+        renderer()
+
+    _render_log()
+
+
+def _page_gameover() -> None:
+    if game.year >= game.GAME_LENGTH:
+        st.balloons()
+        st.title("🎉 Congratulations — 30 years managed!")
+    else:
+        st.title("💀 Ecosystem Collapsed")
+        st.error("Ecosystem function reached zero. The land can no longer support its community.")
+
+    endings = {
+        State.GRASSLAND:  ("🌿 GRASSLAND maintained",
+                           "The grass–fire feedback loop is intact and functioning."),
+        State.TRANSITION: ("⚠️ TRANSITION state at end",
+                           "The ecosystem is neither fully grass nor shrub dominated."),
+        State.SHRUBLAND:  ("🌳 SHRUBLAND — woody plants dominate",
+                           "Shrubs have established a positive feedback that is hard to reverse."),
+    }
+    headline, detail = endings[game.current_state]
+    st.subheader(headline)
+    st.markdown(detail)
+
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Final statistics")
+        stats = [
+            ("Grass cover",         f"{game.grass_cover:.1f}%"),
+            ("Grass biomass",       f"{game.grass_biomass:.1f}%"),
+            ("Grass diversity",     f"{game.grass_diversity:.1f}%"),
+            ("Shrub density",       f"{game.shrub_density:.1f}%"),
+            ("Ecosystem function",  f"{game.ecosystem_function:.1f}%"),
+            ("State transitions",   str(len(game.history))),
+            ("Invasive species",    str(len(game.invasive_species))),
+            ("Optimal fire interval", f"every {game.optimal_fire_interval} yrs (hidden)"),
+        ]
+        for label, val in stats:
+            st.metric(label, val)
+
+    with col2:
+        score = game._compute_score()
+        st.subheader(f"Final Score: {score} / 200")
+        _score_bar(score)
+        st.markdown(f"**{game._rating(score)}**")
+
+        st.divider()
+        if game.history:
+            st.subheader("State transition history")
+            for h in game.history:
+                st.markdown(h)
+
+    st.divider()
+    if st.button("🌱 Play Again", type="primary", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+
+# ── Router ────────────────────────────────────────────────────────────────────
+
+phase = st.session_state.phase
+
+if phase == "intro":
+    _page_intro()
+
+elif phase in ("main",):
+    # game must exist at this point
+    _page_main()
+
+elif phase == "gameover":
+    _page_gameover()
+
+else:
+    # Fallback — shouldn't happen, but prevents a blank screen
+    st.session_state.phase = "intro"
+    st.rerun()
