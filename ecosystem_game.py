@@ -881,15 +881,18 @@ class EcosystemAdventure:
         target = self.invasive_species[idx - 1]
         self._log(f"Attempting to remove {target.name}...")
 
-        if random.random() < 0.6:
+        # Targeted treatments are the go-to ecological tool: triage
+        # the worst invader, treat it precisely, then move on. Rewarded
+        # with a higher base success rate than the broad-spectrum option.
+        if random.random() < 0.75:
             self.invasive_species.pop(idx - 1)
             self._log(f"Success! You've effectively controlled {target.name}.")
-            self.fn_productivity += random.uniform(5, 10)
+            self.fn_productivity += random.uniform(3, 7)
             self._recompute_ecosystem_function()
         else:
             self._log(f"Despite your efforts, {target.name} persists.")
-            if random.random() < 0.3:
-                target.strength = min(0.5, target.strength * 1.2)
+            if random.random() < 0.15:
+                target.strength = min(0.5, target.strength * 1.15)
                 self._log("⚠️ The species has adapted and become more resilient!")
 
     def _biocontrol(self) -> None:
@@ -937,9 +940,18 @@ class EcosystemAdventure:
         # healthy soil and diverse natives resist re-invasion;
         # degraded systems re-invade no matter how many invaders you remove.
         success_rate = min(
-            0.9,
-            0.4 + self.fn_soil / 200 + self.grass_diversity / 300,
+            0.85,
+            0.30 + self.fn_soil / 200 + self.grass_diversity / 300,
         )
+
+        # Repeat-use penalty: broad-spectrum interventions accumulate
+        # resistance and ecosystem fatigue when used too often.
+        years_since_last = self.year - getattr(self, "_last_comprehensive_year", -10)
+        if years_since_last < 3:
+            success_rate *= 0.5
+            self._log("  ⚠ Repeated use: pesticide resistance and ecosystem fatigue "
+                      "are reducing effectiveness.")
+        self._last_comprehensive_year = self.year
 
         removed_count = 0
         weakened_count = 0
@@ -956,10 +968,31 @@ class EcosystemAdventure:
         if weakened_count:
             self._log(f"Weakened the impact of {weakened_count} invasive species.")
 
-        boost = random.uniform(5, 15)
-        self.fn_productivity += boost
+        # Side-effects: broad-spectrum chemical + mechanical interventions
+        # damage soil micro-organisms and non-target native plants.
+        # Damage compounds when the technique is used repeatedly: pesticide
+        # residues accumulate, microbial communities cannot rebuild.
+        if years_since_last < 3:
+            soil_hit  = random.uniform(15, 25)
+            cover_hit = random.uniform(5, 10)
+        else:
+            soil_hit  = random.uniform(8, 14)
+            cover_hit = random.uniform(3, 6)
+        self.fn_soil      = self.clamp(self.fn_soil      - soil_hit)
+        self.grass_cover  = self.clamp(self.grass_cover  - cover_hit)
+        self._log(f"  Side-effects: soil function -{soil_hit:.1f}%, "
+                  f"non-target cover loss -{cover_hit:.1f}%.")
+
+        # A modest diversity benefit ONLY when the invasion was genuinely
+        # severe (multiple invaders removed) — releasing natives from
+        # competition. Light/single use gives no free benefit.
+        if removed_count >= 2:
+            div_boost = random.uniform(2, 5)
+            self.grass_diversity = self.clamp(self.grass_diversity + div_boost)
+            self._log(f"  Native diversity rebounded (+{div_boost:.1f}%) after "
+                      f"competitive release.")
+
         self._recompute_ecosystem_function()
-        self._log(f"The comprehensive approach improved ecosystem function by {boost:.1f}%.")
 
     def _targeted_grazing(self) -> None:
         type_effectiveness = {
@@ -1376,7 +1409,15 @@ class EcosystemAdventure:
         ) ** (1.0 / 3.0)
         score += balance * 1.5    # max contribution ≈ 150
 
-        score -= len(self.invasive_species) * 15
+        # Liebig's law of the minimum: critically degraded sub-functions
+        # cap overall ecosystem function. Cover and diversity look great
+        # but dead soil means the system will collapse beyond the time
+        # horizon — the score reflects that.
+        for sub in (self.fn_productivity, self.fn_soil, self.fn_hydrology):
+            if sub < 25:
+                score -= (25 - sub) * 1.5
+
+        score -= len(self.invasive_species) * 8
 
         if self.current_state is State.GRASSLAND:
             score += 35
