@@ -102,8 +102,8 @@ class EcosystemAdventure:
     MAX_INVASIVES = 4
     GAME_LENGTH = 30
 
-    STARTING_BUDGET = 80
-    ANNUAL_BUDGET = 25
+    STARTING_BUDGET = 50
+    ANNUAL_BUDGET = 15
 
     def __init__(self) -> None:
         self.grass_cover: float = random.uniform(10, 25)
