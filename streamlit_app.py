@@ -438,6 +438,44 @@ def _page_intro() -> None:
     > ⚠️ You begin in a **degraded, shrub-encroached state** — restoration is the challenge.
     """)
 
+    st.divider()
+    st.subheader("Choose your ecosystem type")
+    st.markdown("""
+    The **evolutionary grazing history** of your grassland fundamentally changes how
+    it responds to management — based on [Cingolani, Noy-Meir & Díaz (2005)](https://doi.org/10.1890/03-5272).
+    """)
+
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.success("""
+        **🌍 Long evolutionary history**
+        *(African savanna, Eurasian steppe, Pampas)*
+        - Native grasses co-evolved with large herbivores
+        - Two species pools: grazing-adapted + grazing-tolerant
+        - Moderate grazing can *increase* diversity
+        - Overgrazing is **reversible** — reduce pressure, system recovers
+        - Soil stability partly decoupled from cover
+        - Lower invasion risk
+        """)
+    with col_r:
+        st.error("""
+        **🦘 Short evolutionary history**
+        *(Australia, New Zealand, pre-colonial Americas)*
+        - Native plants have no evolved grazing defences
+        - No pre-adapted species pool — any sustained overgrazing hurts
+        - State transitions are **irreversible** — thresholds are real
+        - Soil collapses rapidly when cover is lost
+        - Higher invasion risk (introduced grazers' weeds are competitive)
+        """)
+
+    history = st.radio(
+        "Evolutionary grazing history",
+        ["Long history", "Short history"],
+        horizontal=True,
+    )
+
+    st.divider()
+    st.subheader("Choose difficulty")
     col1, col2 = st.columns(2)
     with col1:
         st.info("""
@@ -459,8 +497,9 @@ def _page_intro() -> None:
 
     if st.button("🌱 Start Game", type="primary", use_container_width=True):
         g = EcosystemAdventure()
-        g.headless  = True
-        g.hard_mode = (difficulty == "Hard")
+        g.headless        = True
+        g.hard_mode       = (difficulty == "Hard")
+        g.grazing_history = "long" if history == "Long history" else "short"
         st.session_state.game             = g
         st.session_state.log              = []
         st.session_state.phase            = "main"
@@ -472,7 +511,8 @@ def _page_intro() -> None:
 
 def _page_main() -> None:
     icon  = STATE_COLOUR.get(game.current_state, "⚪")
-    title = f"{icon} Year {game.year} / {game.GAME_LENGTH}  —  {game.current_state.value}"
+    hist_tag = "🌍 Long history" if game._long_history else "🦘 Short history"
+    title = f"{icon} Year {game.year} / {game.GAME_LENGTH}  —  {game.current_state.value}  |  {hist_tag}"
 
     if game.hard_mode:
         title += f"  |  Budget: ${game.budget}"

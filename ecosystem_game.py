@@ -135,9 +135,21 @@ class EcosystemAdventure:
         self.optimal_fire_interval: int = random.randint(3, 6)
 
         self.hard_mode: bool = False
+        # Evolutionary grazing history — controls resilience and reversibility.
+        # "long"  = co-evolved with large herbivores (Serengeti, Eurasian steppe,
+        #           Pampas); two species pools, reversible transitions, lower
+        #           invasion risk. Based on Cingolani et al. (2005) MSL model.
+        # "short" = no livestock co-evolution (Australia, NZ, pre-colonial
+        #           Americas); irreversible transitions, rapid soil-cover coupling,
+        #           higher invasion risk.
+        self.grazing_history: str = "short"
         # Headless mode: suppress input() and print(); collect output in messages.
         self.headless: bool = False
         self.messages: list[str] = []
+
+    @property
+    def _long_history(self) -> bool:
+        return self.grazing_history == "long"
 
     # ------------------------------------------------------------------
     def _compute_fn(self) -> float:
@@ -228,8 +240,36 @@ class EcosystemAdventure:
         self._log("Disturbance (fire OR appropriate grazing) is required to keep")
         self._log("the system functional. Beware of crossing thresholds!")
 
+        self._choose_grazing_history()
         self._choose_difficulty()
         self.pause("\nPress Enter to begin your adventure...")
+
+    def _choose_grazing_history(self) -> None:
+        self._log("\n" + "-" * 60)
+        self._log("What is this ecosystem's evolutionary grazing history?")
+        self._log("\n  1. LONG history — grassland co-evolved with large")
+        self._log("     herbivores (e.g. African savanna, Eurasian steppe,")
+        self._log("     South American pampas). Native grasses have grazed-")
+        self._log("     adapted and grazing-tolerant species pools. Changes")
+        self._log("     caused by overgrazing are largely REVERSIBLE if")
+        self._log("     pressure is removed. Lower invasion risk.")
+        self._log("\n  2. SHORT history — grassland evolved WITHOUT large")
+        self._log("     mammalian herbivores (e.g. Australia, New Zealand,")
+        self._log("     pre-colonial Americas). Native plants lack grazing")
+        self._log("     adaptations. Overgrazing causes IRREVERSIBLE state")
+        self._log("     transitions. Soil stability is tightly coupled to")
+        self._log("     cover. Higher invasion risk.")
+        while True:
+            choice = input("\nEnter 1 or 2: ").strip()
+            if choice == "1":
+                self.grazing_history = "long"
+                self._log("\nLONG history: resilient system, reversible transitions.")
+                return
+            if choice == "2":
+                self.grazing_history = "short"
+                self._log("\nSHORT history: fragile system, thresholds are real.")
+                return
+            self._log("Please enter 1 or 2.")
 
     def _choose_difficulty(self) -> None:
         self._log("\n" + "-" * 60)
@@ -1072,6 +1112,15 @@ class EcosystemAdventure:
         self._apply_shrub_growth()
         self._apply_function_feedback()
 
+        # Long-history: persistent root crowns and deep root systems allow
+        # rapid regrowth when grazing pressure is reduced — reversibility
+        # mechanism (Briske 1996; Cingolani et al. 2005 Table 1).
+        # Short-history: without pre-adapted tillers and deep crowns, recovery
+        # requires external seed input (active reseeding).
+        if self._long_history and self.grazing_pressure <= 20 and self.grass_cover > 5:
+            regrowth = random.uniform(1.0, 2.5)
+            self.grass_cover = self.clamp(self.grass_cover + regrowth)
+
         if self.invasive_species:
             self.apply_invasive_effects()
 
@@ -1119,18 +1168,51 @@ class EcosystemAdventure:
             cover_loss = 0.18 * p
         self.grass_cover = self.clamp(self.grass_cover - cover_loss)
 
-        if 20 < p <= 40 and self.grass_biomass > 55:
-            self.grass_diversity = self.clamp(
-                self.grass_diversity + random.uniform(1.0, 2.5)
-            )
-        elif p == 0 and self.grass_biomass > 65:
-            self.grass_diversity = self.clamp(
-                self.grass_diversity - random.uniform(0.5, 1.5)
-            )
-        elif p > 70:
-            self.grass_diversity = self.clamp(
-                self.grass_diversity - random.uniform(1.0, 3.0)
-            )
+        # ── Grazing–diversity interaction (Cingolani et al. 2005) ────────────
+        # Long history: two species pools (grazing-resistant + grazing-tolerant)
+        # have been selected over millennia. Moderate grazing mixes the pools
+        # → diversity BENEFIT. Heavy grazing shifts to resistant pool only → loss
+        # is damped. Zero grazing with high biomass → tall-grass dominance → loss.
+        #
+        # Short history: no evolved two-pool system. Any sustained grazing
+        # degrades diversity because native plants have no grazing adaptations.
+        if self._long_history:
+            if 15 < p <= 45 and self.grass_cover > 25:
+                # Moderate grazing mixes pools — broader, more open community
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity + random.uniform(0.8, 2.0)
+                )
+            elif p == 0 and self.grass_biomass > 65:
+                # Total rest → tall-grass dominance excludes short-grass pool
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity - random.uniform(0.3, 1.0)
+                )
+            elif p > 70:
+                # Heavy grazing damages even adapted pool; damped vs short history
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity - random.uniform(0.5, 1.5)
+                )
+        else:
+            # Short history: no adapted pool — grazing hits diversity hard
+            if 20 < p <= 40 and self.grass_biomass > 55:
+                # Mild benefit only when biomass is high enough to buffer
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity + random.uniform(0.2, 0.8)
+                )
+            elif p == 0 and self.grass_biomass > 65:
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity - random.uniform(0.5, 1.5)
+                )
+            elif p > 30:
+                # Even moderate-heavy grazing erodes diversity without adapted pool
+                extra_loss = (p - 30) / 100 * random.uniform(0.8, 1.8)
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity - extra_loss
+                )
+            if p > 70:
+                self.grass_diversity = self.clamp(
+                    self.grass_diversity - random.uniform(1.5, 4.0)
+                )
 
     def _apply_biomass_dynamics(self) -> None:
         ceiling = min(100, self.grass_cover * 1.2)
@@ -1143,27 +1225,40 @@ class EcosystemAdventure:
         self.grass_biomass = self.clamp(self.grass_biomass)
 
     def _apply_diversity_dynamics(self) -> None:
+        # Thatch-driven suppression: unburnt biomass excludes light-demanding
+        # species. Long-history systems are more resilient — the grazing-tolerant
+        # short-grass pool persists under thatch better than novel-grazed natives.
+        resilience = 0.5 if self._long_history else 1.0
         if self.grass_biomass > 65 and self.years_since_fire > 2:
             years_factor = min(2.0, self.years_since_fire / 3)
             self.grass_diversity = self.clamp(
-                self.grass_diversity - 0.5 * years_factor
+                self.grass_diversity - resilience * 0.5 * years_factor
             )
 
+        # Passive recovery under benign conditions.
+        # Long-history systems recover faster from root-stock and persistent
+        # seed banks (Bakker & Berendse 1999); short-history systems have
+        # transient seed banks and slow recovery without active reseeding.
         if (20 <= self.grass_cover <= 85
                 and self.grass_biomass < 70
                 and self.grazing_pressure <= 50):
-            self.grass_diversity = self.clamp(
-                self.grass_diversity + random.uniform(0.5, 1.5)
-            )
+            recovery = random.uniform(0.7, 2.0) if self._long_history else random.uniform(0.2, 0.8)
+            self.grass_diversity = self.clamp(self.grass_diversity + recovery)
 
         invasive_load = sum(sp.strength for sp in self.invasive_species)
         if invasive_load > 0.3:
+            # Short-history natives have no competitive co-evolution with
+            # livestock-associated invaders — invasion damage is amplified.
+            inv_multiplier = 1.0 if self._long_history else 1.8
             self.grass_diversity = self.clamp(
-                self.grass_diversity - invasive_load * 1.5
+                self.grass_diversity - invasive_load * 1.5 * inv_multiplier
             )
 
-        SEEDBANK_BUFFER = 30
-        cover_ceiling = min(100.0, self.grass_cover + SEEDBANK_BUFFER)
+        # Seed bank ceiling: diversity can't exceed what cover can support.
+        # Long-history systems have deeper persistent seed banks (buffer = 40).
+        # Short-history systems have mostly transient seed banks (buffer = 20).
+        seedbank_buffer = 40 if self._long_history else 20
+        cover_ceiling = min(100.0, self.grass_cover + seedbank_buffer)
         if self.grass_diversity > cover_ceiling:
             excess = self.grass_diversity - cover_ceiling
             self.grass_diversity -= min(2.0, 0.3 * excess)
@@ -1183,6 +1278,10 @@ class EcosystemAdventure:
         growth = 2 + (bare / 20)
         if self.shrub_density > 30:
             growth += self.shrub_density / 10
+        # Short-history grasslands lack a dense, fire-adapted grass layer that
+        # suppresses woody recruitment. Once grass thins, shrubs fill in faster.
+        if not self._long_history and self.grass_cover < 50:
+            growth *= 1.4
         self.shrub_density = self.clamp(self.shrub_density + growth)
 
     def _apply_function_feedback(self) -> None:
@@ -1232,15 +1331,29 @@ class EcosystemAdventure:
         # ── Soil function ─────────────────────────────────────────────
         # Slow builder — organic matter from grass litter and root turnover.
         # Degrades slowly under bare ground; compaction from heavy grazing.
+        #
+        # Long-history: millennia of grazing have built deep organic matter
+        # reserves and stable soil aggregates partially decoupled from current
+        # cover (Cingolani et al. 2005, Table 1: "soil stability independent
+        # of plant cover"). Erosion is slower, recovery is faster.
+        #
+        # Short-history: soil stability IS coupled to plant cover — losing
+        # cover triggers rapid erosion and biological soil crust breakdown
+        # (Schlesinger et al. 1990). Positive feedback: bare soil → more
+        # bare soil.
         if self.grass_cover > 30 and self.grass_biomass > 20:
             soil_delta = random.uniform(0.3, 0.7)   # slow organic-matter build
         elif self.grass_cover < 10:
-            soil_delta = random.uniform(-0.8, -0.4)  # erosion, no input
+            if self._long_history:
+                soil_delta = random.uniform(-0.5, -0.2)  # buffered by reserves
+            else:
+                soil_delta = random.uniform(-1.4, -0.7)  # rapid erosion spiral
         else:
             soil_delta = random.uniform(-0.2, 0.2)   # neutral
 
         if self.grazing_pressure > 60:
-            soil_delta -= 0.3  # compaction penalty
+            # Compaction; stronger in short-history (no trampling-adapted flora)
+            soil_delta -= 0.5 if not self._long_history else 0.3
         soil_delta += random.uniform(-0.1, 0.1)
         self.fn_soil += soil_delta
 
@@ -1264,7 +1377,11 @@ class EcosystemAdventure:
         self._recompute_ecosystem_function()
 
     def _maybe_introduce_invasive(self) -> None:
-        if random.random() < 0.15 and len(self.invasive_species) < self.MAX_INVASIVES:
+        # Short-history natives have no competitive co-evolution with
+        # livestock-associated invaders (many of which evolved WITH large
+        # herbivores in Eurasia/Africa). The invasion window is much wider.
+        spawn_rate = 0.10 if self._long_history else 0.25
+        if random.random() < spawn_rate and len(self.invasive_species) < self.MAX_INVASIVES:
             self.introduce_invasive_species()
 
     def _random_event(self) -> None:
