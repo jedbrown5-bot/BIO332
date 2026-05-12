@@ -169,6 +169,8 @@ def _init_state() -> None:
         "undo_stack":      [],
         "undos_remaining": None,
         "metric_history":  [],   # list of {"year": int, attr: float, ...}
+        "intro_history":   "short",   # "long" | "short"
+        "intro_difficulty": "easy",   # "easy" | "hard"
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -761,48 +763,59 @@ def _page_intro() -> None:
         unsafe_allow_html=True,
     )
 
+    sel_h = st.session_state.intro_history
     hcol1, hcol2 = st.columns(2)
-    with hcol1:
-        st.markdown(
-            "<div style='background:#f0faf4;border:2px solid #52b788;border-radius:12px;"
-            "padding:18px 20px;height:100%;'>"
-            "<div style='font-size:1.4rem;margin-bottom:6px;'>🌍</div>"
-            "<div style='font-weight:700;font-size:0.95rem;color:#1b4332;margin-bottom:8px;'>"
-            "Long evolutionary history</div>"
-            "<div style='font-size:0.8rem;color:#374151;line-height:1.65;'>"
-            "<em>African savanna · Eurasian steppe · Pampas</em><br><br>"
-            "Native grasses <strong>co-evolved with large herbivores</strong>. "
-            "Two species pools (grazing-adapted + grazing-tolerant) means moderate "
-            "grazing can <em>increase</em> diversity. Overgrazing is "
-            "<strong>reversible</strong> — reduce pressure and the system recovers. "
-            "Soil is partly decoupled from cover. Lower invasion risk."
-            "</div></div>",
-            unsafe_allow_html=True,
-        )
-    with hcol2:
-        st.markdown(
-            "<div style='background:#fef2f2;border:2px solid #c47474;border-radius:12px;"
-            "padding:18px 20px;height:100%;'>"
-            "<div style='font-size:1.4rem;margin-bottom:6px;'>🦘</div>"
-            "<div style='font-weight:700;font-size:0.95rem;color:#7c1c1c;margin-bottom:8px;'>"
-            "Short evolutionary history</div>"
-            "<div style='font-size:0.8rem;color:#374151;line-height:1.65;'>"
-            "<em>Australia · New Zealand · pre-colonial Americas</em><br><br>"
-            "Plants have <strong>no evolved grazing defences</strong>. Any sustained "
-            "overgrazing degrades the community. State transitions are "
-            "<strong>irreversible</strong> — thresholds are real and hard to cross back. "
-            "Soil collapses rapidly when cover is lost. Higher invasion risk."
-            "</div></div>",
-            unsafe_allow_html=True,
-        )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    history = st.radio(
-        "Evolutionary grazing history",
-        ["🌍 Long history", "🦘 Short history"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+    with hcol1:
+        long_sel = sel_h == "long"
+        border   = "3px solid #1b4332" if long_sel else "2px solid #d1d5db"
+        bg       = "#e8f5ee" if long_sel else "#ffffff"
+        badge    = "<span style='float:right;background:#1b4332;color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;'>✓ SELECTED</span>" if long_sel else ""
+        st.markdown(
+            f"<div style='background:{bg};border:{border};border-radius:12px;"
+            f"padding:18px 20px;min-height:180px;'>"
+            f"{badge}"
+            f"<div style='font-size:1.6rem;margin-bottom:6px;'>🌍</div>"
+            f"<div style='font-weight:700;font-size:1.0rem;color:#1b4332;margin-bottom:6px;'>"
+            f"Long evolutionary history</div>"
+            f"<div style='font-size:0.82rem;color:#374151;line-height:1.6;'>"
+            f"<em>African savanna · Eurasian steppe · Pampas</em><br><br>"
+            f"Grasses <strong>co-evolved with large herbivores</strong>. "
+            f"Moderate grazing can <em>increase</em> diversity. "
+            f"Overgrazing is <strong>reversible</strong>. Lower invasion risk."
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("✓ Long history selected" if long_sel else "Select Long history →",
+                     key="sel_long", use_container_width=True,
+                     type="primary" if long_sel else "secondary"):
+            st.session_state.intro_history = "long"
+            st.rerun()
+
+    with hcol2:
+        short_sel = sel_h == "short"
+        border    = "3px solid #7c1c1c" if short_sel else "2px solid #d1d5db"
+        bg        = "#fde8e8" if short_sel else "#ffffff"
+        badge     = "<span style='float:right;background:#7c1c1c;color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;'>✓ SELECTED</span>" if short_sel else ""
+        st.markdown(
+            f"<div style='background:{bg};border:{border};border-radius:12px;"
+            f"padding:18px 20px;min-height:180px;'>"
+            f"{badge}"
+            f"<div style='font-size:1.6rem;margin-bottom:6px;'>🦘</div>"
+            f"<div style='font-weight:700;font-size:1.0rem;color:#7c1c1c;margin-bottom:6px;'>"
+            f"Short evolutionary history</div>"
+            f"<div style='font-size:0.82rem;color:#374151;line-height:1.6;'>"
+            f"<em>Australia · New Zealand · pre-colonial Americas</em><br><br>"
+            f"No evolved grazing defences. State transitions are "
+            f"<strong>irreversible</strong>. Soil collapses rapidly. Higher invasion risk."
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("✓ Short history selected" if short_sel else "Select Short history →",
+                     key="sel_short", use_container_width=True,
+                     type="primary" if short_sel else "secondary"):
+            st.session_state.intro_history = "short"
+            st.rerun()
 
     st.divider()
 
@@ -840,44 +853,60 @@ def _page_intro() -> None:
         "Choose difficulty</p>",
         unsafe_allow_html=True,
     )
+    sel_d = st.session_state.intro_difficulty
     dcol1, dcol2 = st.columns(2)
+
     with dcol1:
+        easy_sel = sel_d == "easy"
+        border   = "3px solid #15803d" if easy_sel else "2px solid #d1d5db"
+        bg       = "#e8f5ee" if easy_sel else "#ffffff"
+        badge    = "<span style='float:right;background:#15803d;color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;'>✓ SELECTED</span>" if easy_sel else ""
         st.markdown(
-            "<div style='background:#f0faf4;border:2px solid #52b788;border-radius:12px;"
-            "padding:16px 18px;'>"
-            "<div style='font-weight:700;color:#1b4332;margin-bottom:6px;'>🟢 Easy mode</div>"
-            "<ul style='font-size:0.82rem;color:#374151;margin:0;padding-left:18px;line-height:1.7;'>"
-            "<li>Field observation tips from ecologists</li>"
-            "<li>No budget constraint</li>"
-            "<li>Unlimited undo</li>"
-            "</ul></div>",
+            f"<div style='background:{bg};border:{border};border-radius:12px;padding:16px 18px;'>"
+            f"{badge}"
+            f"<div style='font-weight:700;font-size:1.0rem;color:#15803d;margin-bottom:8px;'>🟢 Easy</div>"
+            f"<ul style='font-size:0.82rem;color:#374151;margin:0;padding-left:18px;line-height:1.8;'>"
+            f"<li>Field observation hints from ecologists</li>"
+            f"<li>No budget constraint</li>"
+            f"<li>Unlimited undo</li>"
+            f"</ul></div>",
             unsafe_allow_html=True,
         )
+        if st.button("✓ Easy selected" if easy_sel else "Select Easy →",
+                     key="sel_easy", use_container_width=True,
+                     type="primary" if easy_sel else "secondary"):
+            st.session_state.intro_difficulty = "easy"
+            st.rerun()
+
     with dcol2:
+        hard_sel = sel_d == "hard"
+        border   = "3px solid #b45309" if hard_sel else "2px solid #d1d5db"
+        bg       = "#fef3c7" if hard_sel else "#ffffff"
+        badge    = "<span style='float:right;background:#b45309;color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;'>✓ SELECTED</span>" if hard_sel else ""
         st.markdown(
-            f"<div style='background:#fff8e1;border:2px solid #e9c46a;border-radius:12px;"
-            f"padding:16px 18px;'>"
-            f"<div style='font-weight:700;color:#7d4e00;margin-bottom:6px;'>🔴 Hard mode</div>"
-            f"<ul style='font-size:0.82rem;color:#374151;margin:0;padding-left:18px;line-height:1.7;'>"
-            f"<li>No hints or tips</li>"
+            f"<div style='background:{bg};border:{border};border-radius:12px;padding:16px 18px;'>"
+            f"{badge}"
+            f"<div style='font-weight:700;font-size:1.0rem;color:#b45309;margin-bottom:8px;'>🔴 Hard</div>"
+            f"<ul style='font-size:0.82rem;color:#374151;margin:0;padding-left:18px;line-height:1.8;'>"
+            f"<li>No hints</li>"
             f"<li>Tight budget — start ${EcosystemAdventure.STARTING_BUDGET}, "
             f"+${EcosystemAdventure.ANNUAL_BUDGET}/yr</li>"
             f"<li>Only 3 undos</li>"
             f"</ul></div>",
             unsafe_allow_html=True,
         )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    difficulty = st.radio(
-        "Difficulty", ["🟢 Easy", "🔴 Hard"], horizontal=True, label_visibility="collapsed"
-    )
+        if st.button("✓ Hard selected" if hard_sel else "Select Hard →",
+                     key="sel_hard", use_container_width=True,
+                     type="primary" if hard_sel else "secondary"):
+            st.session_state.intro_difficulty = "hard"
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🌱 Start Game", type="primary", use_container_width=True):
         g = EcosystemAdventure()
         g.headless        = True
-        g.hard_mode       = "Hard" in difficulty
-        g.grazing_history = "long" if "Long" in history else "short"
+        g.hard_mode       = st.session_state.intro_difficulty == "hard"
+        g.grazing_history = st.session_state.intro_history
         st.session_state.game            = g
         st.session_state.log             = []
         st.session_state.phase           = "main"
