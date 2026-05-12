@@ -428,21 +428,24 @@ def _base_layout(height: int, **extra) -> dict:
     duplicate-key conflicts when overriding defaults."""
     base = dict(
         height=height,
-        margin=dict(l=8, r=8, t=36, b=8),
+        # l/b generous so axis labels aren't clipped; t small (legend is inside)
+        margin=dict(l=52, r=24, t=20, b=52),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#f9fafb",
-        font=dict(family="Inter, -apple-system, sans-serif", size=12, color="#374151"),
+        font=dict(family="Inter, -apple-system, sans-serif", size=13, color="#1f2937"),
+        # Legend sits inside the plot area — top-right corner — so it's never
+        # clipped by the chart container and the text colour is always visible.
         legend=dict(
-            orientation="h",
-            yanchor="bottom", y=1.04,
-            xanchor="left",   x=0,
-            bgcolor="rgba(255,255,255,0.9)",
-            bordercolor="#e5e7eb",
+            orientation="v",
+            yanchor="top",   y=0.99,
+            xanchor="right", x=0.99,
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor="#d1d5db",
             borderwidth=1,
-            font=dict(size=12),
+            font=dict(size=12, color="#1f2937"),
         ),
         hovermode="x unified",
-        hoverlabel=dict(font_size=12),
+        hoverlabel=dict(font_size=13, bgcolor="#1f2937", font_color="white"),
     )
     # Provide sensible axis defaults only if the caller hasn't overridden them
     base.setdefault("xaxis", dict(**_AXIS_DEFAULTS))
@@ -1140,9 +1143,10 @@ def _page_gameover() -> None:
         lay["yaxis"]["range"] = [0, 115]
         lay["xaxis"] = dict(
             gridcolor="#e9ecef", linecolor="#d1d5db",
-            tickfont=dict(size=14, color="#374151"),
+            tickfont=dict(size=15, color="#1f2937"),
             zeroline=False,
         )
+        lay["font"] = dict(size=13, color="#1f2937")
         fig_sub.update_layout(**lay)
         st.plotly_chart(fig_sub, use_container_width=True, config=_CHART_CFG)
 
