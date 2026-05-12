@@ -80,16 +80,55 @@ def _inject_css() -> None:
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-    html, body, .stApp {
+    /* ── Force light mode globally so dark-mode OS settings don't make
+           text invisible against the light background ── */
+    html, body,
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    .main {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
         background-color: #f4f6f4 !important;
+        color: #1f2937 !important;
     }
 
+    /* All markdown / text containers */
+    .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stText"],
+    .stAlert p {
+        color: #1f2937 !important;
+    }
+
+    /* Expander — header and content body */
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary span,
+    [data-testid="stExpander"] summary p {
+        color: #1f2937 !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+    }
+    [data-testid="stExpander"] > div {
+        background-color: #ffffff !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+    [data-testid="stExpander"] > div p,
+    [data-testid="stExpander"] > div li,
+    [data-testid="stExpander"] > div span {
+        color: #1f2937 !important;
+    }
+
+    /* Block container padding */
     .block-container {
         padding-top: 1.2rem !important;
         padding-left: 2.5rem !important;
         padding-right: 2.5rem !important;
         max-width: 1400px !important;
+        background-color: #f4f6f4 !important;
+        color: #1f2937 !important;
     }
 
     /* ── Buttons ── */
@@ -138,18 +177,14 @@ def _inject_css() -> None:
         color: white !important;
     }
 
-    /* ── Expanders ── */
-    .streamlit-expanderHeader {
-        font-weight: 600 !important;
-        font-size: 0.88rem !important;
-        border-radius: 8px !important;
-    }
-
     /* ── Dividers ── */
     hr { border-color: #e5e7eb !important; margin: 12px 0 !important; }
 
     /* ── Captions ── */
-    .stCaption { color: #6b7280 !important; font-size: 0.8rem !important; }
+    .stCaption, [data-testid="stCaptionContainer"] {
+        color: #6b7280 !important;
+        font-size: 0.8rem !important;
+    }
 
     /* ── Column gap ── */
     div[data-testid="column"] { padding: 0 6px !important; }
