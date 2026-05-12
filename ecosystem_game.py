@@ -1452,17 +1452,23 @@ class EcosystemAdventure:
                 self.grass_diversity - invasive_load * 1.5 * inv_multiplier
             )
 
-        # Seed bank ceiling: diversity can't exceed what cover can support.
-        # Long-history systems have deeper persistent seed banks (buffer = 40).
-        # Short-history systems have mostly transient seed banks (buffer = 20).
-        seedbank_buffer = 40 if self._long_history else 20
-        cover_ceiling = min(100.0, self.grass_cover + seedbank_buffer)
-        if self.grass_diversity > cover_ceiling:
-            excess = self.grass_diversity - cover_ceiling
-            self.grass_diversity -= min(2.0, 0.3 * excess)
-
-        if self.grass_cover < 5:
-            self.grass_diversity = max(0.0, self.grass_diversity - 1.5)
+        # ── Diversity-cover coupling (hard ecological constraint) ──────────────
+        # Expressed diversity cannot be maintained without plants to express it.
+        # Below 30% cover, rare species rapidly go locally extinct. The seed bank
+        # provides potential for fast recovery if cover rebounds, but does NOT
+        # maintain *expressed* diversity at near-zero cover. Soil quality mediates
+        # how deep the seed bank is (higher soil → higher buffer).
+        bank_quality = self.fn_soil / 100         # 0–1
+        # Long-history deep persistent seed banks; short-history mostly transient.
+        seed_bank = (12 if self._long_history else 5) * bank_quality
+        # Ceiling: at 0% cover only seed bank remains; at 50%+ cover no constraint.
+        diversity_ceiling = min(100.0, self.grass_cover * 2.0 + seed_bank)
+        if self.grass_diversity > diversity_ceiling:
+            gap  = self.grass_diversity - diversity_ceiling
+            # Convergence is fast at very low cover (mass local extinction regime),
+            # slower at moderate cover (gradual competitive exclusion).
+            rate = max(2.5, gap * (0.6 if self.grass_cover < 10 else 0.3))
+            self.grass_diversity = self.clamp(self.grass_diversity - rate)
 
         self.grass_diversity = self.clamp(self.grass_diversity)
 
