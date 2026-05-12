@@ -242,8 +242,11 @@ def _render_main_menu() -> None:
 
     cost = lambda c: f" (${c})" if game.hard_mode else ""
 
+    # ── Fire actions ──────────────────────────────────────────────────────────
     if _btn(f"🔥 Prescribed Burn{cost(30)}", "burn"):
         _run(game.conduct_prescribed_burn)
+
+    _render_cultural_burn_button()
 
     if _btn("🐄 Adjust Grazing", "grazing"):
         st.session_state.submenu = "grazing"
@@ -270,6 +273,31 @@ def _render_main_menu() -> None:
     st.divider()
 
     _render_undo_button()
+
+
+def _render_cultural_burn_button() -> None:
+    """Show invest button (with progress) or cultural burn button once established."""
+    g = game
+    cost = lambda c: f" (${c})" if g.hard_mode else ""
+
+    if g._cultural_burn_ready:
+        if _btn(f"🌀 Cultural Burn{cost(15)}", "cburn"):
+            _run(g.conduct_cultural_burn)
+    else:
+        yr = g.cultural_burn_years
+        if yr == 0:
+            label = f"🤝 Begin Cultural Burning Partnership{cost(20)}"
+        else:
+            label = f"🤝 Invest: Cultural Burning ({yr}/3 yrs){cost(20)}"
+        if _btn(label, "cburn_invest"):
+            _run(g.invest_cultural_burning)
+        # Progress indicator
+        if yr > 0:
+            st.markdown(
+                f"<div style='font-size:0.78rem;color:#6b7280;padding:2px 6px;"
+                f"margin-bottom:4px;'>Partnership progress: {'●' * yr}{'○' * (3 - yr)} {yr}/3</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def _back_btn(target: str | None = None) -> None:

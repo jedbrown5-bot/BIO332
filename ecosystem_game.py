@@ -143,6 +143,9 @@ class EcosystemAdventure:
         #           Americas); irreversible transitions, rapid soil-cover coupling,
         #           higher invasion risk.
         self.grazing_history: str = "short"
+        # Cultural burning program: 0 = not started, 1-2 = developing, 3 = established.
+        # Each point represents one year of relationship-building / knowledge transfer.
+        self.cultural_burn_years: int = 0
         # Headless mode: suppress input() and print(); collect output in messages.
         self.headless: bool = False
         self.messages: list[str] = []
@@ -150,6 +153,10 @@ class EcosystemAdventure:
     @property
     def _long_history(self) -> bool:
         return self.grazing_history == "long"
+
+    @property
+    def _cultural_burn_ready(self) -> bool:
+        return self.cultural_burn_years >= 3
 
     # ------------------------------------------------------------------
     def _compute_fn(self) -> float:
@@ -381,15 +388,26 @@ class EcosystemAdventure:
         return hints
 
     def show_menu(self) -> bool:
+        cb_status = (
+            "established" if self._cultural_burn_ready
+            else f"developing {self.cultural_burn_years}/3 yrs"
+            if self.cultural_burn_years > 0 else "not started"
+        )
+        cb_label = (
+            "Conduct cultural burn 🌀"
+            if self._cultural_burn_ready
+            else f"Invest in cultural burning program [{cb_status}]"
+        )
         actions: dict[str, tuple[str, Callable[[], None], bool]] = {
-            "1": ("Conduct prescribed burn",        self.conduct_prescribed_burn, True),
-            "2": ("Adjust grazing pressure",        self.adjust_grazing,          True),
-            "3": ("Remove shrubs",                  self.remove_shrubs,           True),
-            "4": ("Reseed native grasses",          self.reseed_grasses,          True),
-            "5": ("Manage invasive species",        self.manage_invasive_species, True),
-            "6": ("Do nothing (advance one year)",  self.do_nothing,              True),
-            "7": ("View ecosystem state history",   self.display_history,         False),
-            "8": ("Exit game",                      self.exit_game,               False),
+            "1": ("Conduct prescribed burn",        self.conduct_prescribed_burn,  True),
+            "2": (cb_label,                         self._cultural_burn_action,    True),
+            "3": ("Adjust grazing pressure",        self.adjust_grazing,           True),
+            "4": ("Remove shrubs",                  self.remove_shrubs,            True),
+            "5": ("Reseed native grasses",          self.reseed_grasses,           True),
+            "6": ("Manage invasive species",        self.manage_invasive_species,  True),
+            "7": ("Do nothing (advance one year)",  self.do_nothing,               True),
+            "8": ("View ecosystem state history",   self.display_history,          False),
+            "9": ("Exit game",                      self.exit_game,                False),
         }
 
         self._log("\n=== MANAGEMENT OPTIONS ===")
@@ -437,6 +455,13 @@ class EcosystemAdventure:
             for event in self.history:
                 self._log(event)
         self.pause()
+
+    def _cultural_burn_action(self) -> None:
+        """Dispatch: invest in program if not established, else conduct the burn."""
+        if self._cultural_burn_ready:
+            self.conduct_cultural_burn()
+        else:
+            self.invest_cultural_burning()
 
     def conduct_prescribed_burn(self) -> None:
         if not self.spend(30):
@@ -526,6 +551,179 @@ class EcosystemAdventure:
             self._log(f"\nA local ecologist hints the fire would have helped more "
                   f"if conducted {direction}.")
 
+        self.pause()
+
+    def invest_cultural_burning(self) -> None:
+        """Invest one year in building a cultural burning partnership.
+
+        Cultural burns are low-intensity cool fires guided by First Nations
+        ecological knowledge refined over 60,000+ years.  Three years of
+        investment (relationship-building, knowledge transfer, reading Country)
+        are required before the program is established — investments need not
+        be consecutive.
+        """
+        if self._cultural_burn_ready:
+            self._log("\n🌀 The cultural burning program is already established.")
+            self._log("  Use 'Conduct cultural burn' when conditions are right.")
+            self.pause()
+            return
+
+        # One investment per year maximum
+        if getattr(self, "_cultural_burn_invested_year", -1) == self.year:
+            self._log("\n⚠️ You have already invested in the program this year.")
+            self.pause()
+            return
+
+        if not self.spend(20):
+            return
+
+        self._cultural_burn_invested_year = self.year
+        self.cultural_burn_years += 1
+        remaining = 3 - self.cultural_burn_years
+
+        messages = {
+            1: (
+                "\n🤝 Year 1 of cultural burning partnership...",
+                "  You sit with Elders from the local First Nations community.",
+                "  Conversations begin — not about fire, but about Country itself:",
+                "  the species that signal the right season, the winds that carry",
+                "  smoke safely, the patches that need opening, the ones that need rest.",
+            ),
+            2: (
+                "\n🤝 Year 2: Knowledge deepens...",
+                "  Seasonal fire calendars take shape. You learn to read the landscape:",
+                "  when the grass seed sets (don't burn yet), when the mistletoe flowers",
+                "  (time is close), which slopes to fire first and which to hold back.",
+                "  The relationship between people, Country, and fire becomes clearer.",
+            ),
+            3: (
+                "\n🌀 Cultural burning program established!",
+                "  Three years of listening, walking Country, and building trust.",
+                "  The knowledge isn't yours — it belongs to Country — but you now",
+                "  have the relationships and protocols to conduct burns properly.",
+                "  Cultural burns are now available: cooler, more targeted, and",
+                "  ecologically richer than any equipment-based prescribed burn.",
+            ),
+        }
+        for line in messages[self.cultural_burn_years]:
+            self._log(line)
+
+        if remaining > 0:
+            self._log(f"\n  Program progress: {self.cultural_burn_years}/3 years.")
+            self._log(
+                f"  {remaining} more year{'s' if remaining > 1 else ''} of investment"
+                f" needed before the program is operational."
+            )
+        self.pause()
+
+    def conduct_cultural_burn(self) -> None:
+        """Conduct a cultural burn — cool mosaic fires guided by First Nations knowledge.
+
+        Cultural burns are low-intensity, patchy fires set at ecologically informed
+        times.  They create fine-scale mosaics that increase grass diversity, do not
+        sterilise soil, and actively improve hydrology.  Effects are strongest in
+        Australian (short evolutionary history) grasslands where fire has been a
+        keystone disturbance for millennia before European livestock arrived.
+        """
+        if not self._cultural_burn_ready:
+            self._log("\n⚠️ Cultural burning program not yet established.")
+            self._log("  Invest in the partnership for 3 years first.")
+            self.pause()
+            return
+
+        if not self.spend(15):   # knowledge-based: less equipment cost than prescribed
+            return
+
+        self._log("\n🌀 Reading Country for the cultural burn...")
+
+        fuel = self.grass_biomass
+        # Skilled practitioners can work with lower fuel loads
+        if fuel < 15:
+            self._log("  Country says: not yet. Too little continuous fuel this season.")
+            self._log("  The burn is deferred — practitioners know when to hold back.")
+            self.pause()
+            return
+
+        if self.years_since_fire < 2:
+            self._log("  Country hasn't rested enough since the last fire.")
+            self._log("  Cultural burning protocol prevents burning again so soon.")
+            self.pause()
+            return
+
+        self._log("  The seasonal cues align. Fire is carried gently across Country.")
+
+        pre_fire_biomass = self.grass_biomass
+        # Cool fire removes 40-55% of biomass (vs ~85% for prescribed burns)
+        biomass_fraction_remaining = random.uniform(0.45, 0.60)
+        self.grass_biomass = self.clamp(self.grass_biomass * biomass_fraction_remaining)
+
+        # Shrub reduction — mosaic burns are as effective as prescribed for shrubs
+        shrub_red = random.uniform(22, 42)
+        deviation = abs(self.years_since_fire - self.optimal_fire_interval)
+
+        if deviation <= 1:
+            self._log("  ✨ Perfect Country timing — the fire moves exactly as needed.")
+            shrub_red *= 1.45
+            # High chance of suppressing an invasive at peak timing
+            if self.invasive_species and random.random() < 0.5:
+                removed = self.invasive_species.pop(
+                    random.randrange(len(self.invasive_species))
+                )
+                self._log(f"  The mosaic burn suppressed {removed.name} populations.")
+        elif deviation == 2:
+            self._log("  Good timing — a productive season burn.")
+            shrub_red *= 1.15
+        else:
+            self._log("  Timing was off, but knowledge prevents the worst outcomes.")
+            shrub_red *= 0.85
+            # Cultural knowledge means they never cause an invasive outbreak
+            # (prescribed burns could; cultural burns won't)
+
+        self.shrub_density = self.clamp(self.shrub_density - shrub_red)
+
+        # Cover: mosaic means not everything burns — less cover loss than prescribed
+        cover_loss = random.uniform(2, 5)   # vs 5-10 for prescribed
+        self.grass_cover = self.clamp(self.grass_cover - cover_loss)
+
+        # BIG diversity boost: mosaic creates microhabitat heterogeneity that
+        # is impossible to replicate with whole-paddock prescribed burns
+        div_boost = random.uniform(14, 24)
+        if not self._long_history:
+            # Australian grasslands: fire was THE keystone disturbance —
+            # cultural burns unlock the full fire-adapted diversity potential
+            div_boost += random.uniform(5, 10)
+            self._log(
+                "  Fire is in Country's memory here — grasses burst back "
+                "with a diversity that surprises observers used to European landscapes."
+            )
+        else:
+            # Long-history grasslands have other disturbance-adapted pathways too
+            div_boost += random.uniform(2, 5)
+            self._log("  The mosaic activates both grazing-adapted and fire-sensitive species pools.")
+
+        self.grass_diversity = self.clamp(self.grass_diversity + div_boost)
+        self._log(f"  Grass diversity surged (+{div_boost:.1f}%).")
+
+        # Soil: cool fire deposits ash without sterilising — net POSITIVE
+        # (prescribed burns leave a slight negative from heat shock to microbes)
+        soil_gain = random.uniform(1.0, 3.5)
+        self.fn_soil = self.clamp(self.fn_soil + soil_gain)
+        self._log(f"  Ash nutrients absorbed; soil microbes undisturbed (+{soil_gain:.1f}%).")
+
+        # Hydrology: open patches improve infiltration and reduce runoff
+        hydro_gain = random.uniform(0.5, 2.5)
+        self.fn_hydrology = self.clamp(self.fn_hydrology + hydro_gain)
+
+        # Productivity: similar immediate spike to prescribed, but sustained longer
+        eco_impact = random.uniform(6, 14)
+        self.fn_productivity = self.clamp(self.fn_productivity + eco_impact)
+
+        self._recompute_ecosystem_function()
+        self.years_since_fire = 0
+
+        self._log(f"  Hydrology improved (+{hydro_gain:.1f}%).")
+        self._log(f"\nCountry breathes. The grasses will recover with vigour.")
+        self._log(f"Ecosystem function: +{eco_impact:.1f}%")
         self.pause()
 
     GRAZING_OPTIONS: list[tuple[str, int, int]] = [

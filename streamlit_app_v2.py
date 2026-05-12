@@ -456,6 +456,31 @@ def _render_undo_button() -> None:
         st.rerun()
 
 
+def _render_cultural_burn_button() -> None:
+    g = game
+    cost = lambda c: f"  ${c}" if g.hard_mode else ""
+
+    if g._cultural_burn_ready:
+        if _btn(f"🌀 Cultural Burn{cost(15)}", "cburn"):
+            _run(g.conduct_cultural_burn)
+    else:
+        yr = g.cultural_burn_years
+        label = (
+            f"🤝 Begin Cultural Burning Partnership{cost(20)}"
+            if yr == 0
+            else f"🤝 Invest: Cultural Burning ({yr}/3 yrs){cost(20)}"
+        )
+        if _btn(label, "cburn_invest"):
+            _run(g.invest_cultural_burning)
+        if yr > 0:
+            dots = "●" * yr + "○" * (3 - yr)
+            st.markdown(
+                f"<div style='font-size:0.75rem;color:#6b7280;padding:1px 6px;"
+                f"margin-bottom:4px;'>Partnership: {dots} {yr}/3 yrs</div>",
+                unsafe_allow_html=True,
+            )
+
+
 def _render_main_menu() -> None:
     cost = lambda c: f"  ${c}" if game.hard_mode else ""
 
@@ -467,6 +492,8 @@ def _render_main_menu() -> None:
 
     if _btn(f"🔥 Prescribed Burn{cost(30)}", "burn"):
         _run(game.conduct_prescribed_burn)
+
+    _render_cultural_burn_button()
 
     if _btn("🐄 Adjust Grazing", "grazing"):
         st.session_state.submenu = "grazing"; st.rerun()
@@ -745,6 +772,34 @@ def _page_intro() -> None:
         ["🌍 Long history", "🦘 Short history"],
         horizontal=True,
         label_visibility="collapsed",
+    )
+
+    st.divider()
+
+    # Cultural burning explainer
+    st.markdown(
+        "<p style='font-weight:700;color:#1b4332;font-size:1.0rem;margin-bottom:6px;'>"
+        "🌀 Cultural burning — an unlockable mechanic</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div style='background:#f5f0ff;border-left:4px solid #7c3aed;"
+        "border-radius:8px;padding:14px 16px;margin-bottom:16px;"
+        "font-size:0.85rem;color:#374151;line-height:1.7;'>"
+        "In Australia, <strong>First Nations peoples maintained grassland ecosystems for 60,000+ years</strong> "
+        "through regular, low-intensity cool burns — firestick farming. "
+        "This knowledge was largely severed by colonisation and disconnection from Country.<br><br>"
+        "In the game, you can invest in re-establishing a <strong>cultural burning partnership</strong> "
+        "with local Elders. It takes <strong>3 years of relationship-building</strong> ($20/yr in hard mode) "
+        "and gives access to cultural burns that are ecologically superior to Western prescribed burns:<br>"
+        "<ul style='margin:6px 0 0 0;padding-left:18px;'>"
+        "<li>Cool mosaic fires → <strong>much larger diversity boost</strong></li>"
+        "<li>No soil sterilisation → <strong>soil function improves</strong> after each burn</li>"
+        "<li>Better shrub control and invasive suppression at optimal timing</li>"
+        "<li>Cheaper per burn ($15 vs $30) once established</li>"
+        "<li>Especially powerful in Australian (short history) grasslands</li>"
+        "</ul></div>",
+        unsafe_allow_html=True,
     )
 
     st.divider()
