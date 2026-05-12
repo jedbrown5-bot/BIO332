@@ -382,9 +382,16 @@ def _render_status() -> None:
 
 _CHART_CFG = {"displayModeBar": False, "responsive": True}
 
+_AXIS_DEFAULTS = dict(
+    gridcolor="#e9ecef", linecolor="#d1d5db",
+    tickfont=dict(size=12), title_font=dict(size=12),
+    zeroline=False,
+)
+
 def _base_layout(height: int, **extra) -> dict:
-    """Shared Plotly layout for all charts — readable fonts, clean grid."""
-    return dict(
+    """Shared Plotly layout. Callers supply xaxis/yaxis via **extra to avoid
+    duplicate-key conflicts when overriding defaults."""
+    base = dict(
         height=height,
         margin=dict(l=8, r=8, t=36, b=8),
         paper_bgcolor="#ffffff",
@@ -399,21 +406,16 @@ def _base_layout(height: int, **extra) -> dict:
             borderwidth=1,
             font=dict(size=12),
         ),
-        xaxis=dict(
-            gridcolor="#e9ecef", linecolor="#d1d5db",
-            tickfont=dict(size=12), title_font=dict(size=12),
-            zeroline=False,
-        ),
-        yaxis=dict(
-            range=[0, 105], gridcolor="#e9ecef", linecolor="#d1d5db",
-            title="%", ticksuffix="%",
-            tickfont=dict(size=12), title_font=dict(size=12),
-            zeroline=False,
-        ),
         hovermode="x unified",
         hoverlabel=dict(font_size=12),
-        **extra,
     )
+    # Provide sensible axis defaults only if the caller hasn't overridden them
+    base.setdefault("xaxis", dict(**_AXIS_DEFAULTS))
+    base.setdefault("yaxis", dict(
+        range=[0, 105], title="%", ticksuffix="%", **_AXIS_DEFAULTS
+    ))
+    base.update(extra)
+    return base
 
 
 def _trends_chart() -> None:
