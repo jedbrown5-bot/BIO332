@@ -66,10 +66,10 @@ HISTORY_TRACK = [
 ]
 
 CHART_SERIES = [
-    ("grass_cover",        "Grass Cover",    "#40916c"),
-    ("grass_diversity",    "Diversity",      "#52b788"),
-    ("ecosystem_function", "Eco Function",   "#1b4332"),
-    ("shrub_density",      "Shrub Density",  "#a0522d"),
+    ("grass_cover",        "Grass Cover",    "#16a34a"),   # green
+    ("grass_diversity",    "Diversity",      "#2563eb"),   # blue
+    ("ecosystem_function", "Eco Function",   "#9333ea"),   # purple
+    ("shrub_density",      "Shrub Density",  "#dc2626"),   # red
 ]
 
 
@@ -376,7 +376,43 @@ def _render_status() -> None:
                 st.markdown(h)
 
 
-# ── Trend chart ───────────────────────────────────────────────────────────────
+# ── Chart helpers ─────────────────────────────────────────────────────────────
+
+_CHART_CFG = {"displayModeBar": False, "responsive": True}
+
+def _base_layout(height: int, **extra) -> dict:
+    """Shared Plotly layout for all charts — readable fonts, clean grid."""
+    return dict(
+        height=height,
+        margin=dict(l=8, r=8, t=36, b=8),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#f9fafb",
+        font=dict(family="Inter, -apple-system, sans-serif", size=12, color="#374151"),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom", y=1.04,
+            xanchor="left",   x=0,
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="#e5e7eb",
+            borderwidth=1,
+            font=dict(size=12),
+        ),
+        xaxis=dict(
+            gridcolor="#e9ecef", linecolor="#d1d5db",
+            tickfont=dict(size=12), title_font=dict(size=12),
+            zeroline=False,
+        ),
+        yaxis=dict(
+            range=[0, 105], gridcolor="#e9ecef", linecolor="#d1d5db",
+            title="%", ticksuffix="%",
+            tickfont=dict(size=12), title_font=dict(size=12),
+            zeroline=False,
+        ),
+        hovermode="x unified",
+        hoverlabel=dict(font_size=12),
+        **extra,
+    )
+
 
 def _trends_chart() -> None:
     history = st.session_state.metric_history
@@ -386,42 +422,36 @@ def _trends_chart() -> None:
     years = [h["year"] for h in history]
     fig = go.Figure()
 
-    for attr, name, colour in CHART_SERIES:
+    dashes = ["solid", "solid", "dash", "solid"]
+    for (attr, name, colour), dash in zip(CHART_SERIES, dashes):
         fig.add_trace(go.Scatter(
             x=years,
             y=[h[attr] for h in history],
             name=name,
-            line=dict(color=colour, width=2.2),
-            mode="lines",
-            hovertemplate=f"%{{y:.1f}}%<extra>{name}</extra>",
+            line=dict(color=colour, width=2.5, dash=dash),
+            mode="lines+markers",
+            marker=dict(size=4, color=colour),
+            hovertemplate=f"<b>{name}</b>: %{{y:.1f}}%<extra></extra>",
         ))
 
-    # Reference line at cover threshold
     fig.add_hline(
-        y=40, line_dash="dot", line_color="#9ca3af", line_width=1,
-        annotation_text="Cover threshold",
-        annotation_font_size=10,
+        y=40, line_dash="dot", line_color="#9ca3af", line_width=1.5,
+        annotation_text="Recovery threshold (40%)",
+        annotation_font_size=11,
         annotation_position="bottom right",
     )
 
-    fig.update_layout(
-        height=210,
-        margin=dict(l=0, r=0, t=8, b=32),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(248,250,248,0.9)",
-        legend=dict(orientation="h", y=-0.28, x=0, font=dict(size=10)),
+    fig.update_layout(**_base_layout(
+        300,
         xaxis=dict(
             title="Year", range=[0, 30],
-            gridcolor="#e9ecef", title_font=dict(size=10), tickfont=dict(size=9),
+            gridcolor="#e9ecef", linecolor="#d1d5db",
+            tickfont=dict(size=12), title_font=dict(size=12),
+            zeroline=False,
         ),
-        yaxis=dict(
-            range=[0, 100], gridcolor="#e9ecef",
-            title="%", title_font=dict(size=10), tickfont=dict(size=9),
-        ),
-        hovermode="x unified",
-    )
+    ))
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config=_CHART_CFG)
 
 
 # ── Action panel ──────────────────────────────────────────────────────────────
@@ -866,13 +896,6 @@ def _page_main() -> None:
 
     with left:
         _render_status()
-        st.markdown(
-            "<p style='font-weight:700;font-size:0.82rem;color:#6b7280;"
-            "text-transform:uppercase;letter-spacing:1px;margin:10px 0 4px;'>"
-            "Ecosystem Trends</p>",
-            unsafe_allow_html=True,
-        )
-        _trends_chart()
 
     with right:
         submenu  = st.session_state.submenu
@@ -880,6 +903,16 @@ def _page_main() -> None:
         renderer()
 
     _render_log()
+
+    # Trend chart full-width below the two panels so it has space to breathe
+    if len(st.session_state.metric_history) >= 2:
+        st.markdown(
+            "<p style='font-weight:700;font-size:0.88rem;color:#6b7280;"
+            "text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px;'>"
+            "Ecosystem Trends</p>",
+            unsafe_allow_html=True,
+        )
+        _trends_chart()
 
 
 def _page_gameover() -> None:
@@ -973,41 +1006,48 @@ def _page_gameover() -> None:
                             unsafe_allow_html=True)
 
     with col_chart:
-        # Full-game time series
         history = st.session_state.metric_history
+
+        # ── 30-year ecosystem trajectory ──────────────────────────────────────
         if len(history) >= 2:
             st.markdown(
-                "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;margin-bottom:6px;'>"
+                "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;margin-bottom:4px;'>"
                 "30-year Trajectory</p>",
                 unsafe_allow_html=True,
             )
             years = [h["year"] for h in history]
             fig_ts = go.Figure()
-            for attr, name, colour in CHART_SERIES:
+            dashes = ["solid", "solid", "dash", "solid"]
+            for (attr, name, colour), dash in zip(CHART_SERIES, dashes):
                 fig_ts.add_trace(go.Scatter(
                     x=years, y=[h[attr] for h in history],
-                    name=name, line=dict(color=colour, width=2.2),
-                    mode="lines",
-                    hovertemplate=f"%{{y:.1f}}%<extra>{name}</extra>",
+                    name=name,
+                    line=dict(color=colour, width=2.5, dash=dash),
+                    mode="lines+markers",
+                    marker=dict(size=4, color=colour),
+                    hovertemplate=f"<b>{name}</b>: %{{y:.1f}}%<extra></extra>",
                 ))
-            fig_ts.add_hline(y=40, line_dash="dot", line_color="#9ca3af", line_width=1)
-            fig_ts.update_layout(
-                height=230, margin=dict(l=0, r=0, t=8, b=36),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,248,0.9)",
-                legend=dict(orientation="h", y=-0.3, x=0, font=dict(size=10)),
-                xaxis=dict(title="Year", range=[0, 30], gridcolor="#e9ecef",
-                           title_font=dict(size=10), tickfont=dict(size=9)),
-                yaxis=dict(range=[0, 100], gridcolor="#e9ecef",
-                           title="%", title_font=dict(size=10), tickfont=dict(size=9)),
-                hovermode="x unified",
+            fig_ts.add_hline(
+                y=40, line_dash="dot", line_color="#9ca3af", line_width=1.5,
+                annotation_text="Recovery threshold (40%)",
+                annotation_font_size=11,
+                annotation_position="bottom right",
             )
-            st.plotly_chart(fig_ts, use_container_width=True,
-                            config={"displayModeBar": False})
+            fig_ts.update_layout(**_base_layout(
+                320,
+                xaxis=dict(
+                    title="Year", range=[0, 30],
+                    gridcolor="#e9ecef", linecolor="#d1d5db",
+                    tickfont=dict(size=12), title_font=dict(size=12),
+                    zeroline=False,
+                ),
+            ))
+            st.plotly_chart(fig_ts, use_container_width=True, config=_CHART_CFG)
 
-        # Sub-function final bar chart
+        # ── Sub-function final bar chart ───────────────────────────────────────
         st.markdown(
-            "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;margin-bottom:6px;'>"
-            "Final Sub-function Breakdown</p>",
+            "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;"
+            "margin:16px 0 4px;'>Final Sub-function Breakdown</p>",
             unsafe_allow_html=True,
         )
         sub_labels  = [label for label, _, _, _ in SUB_FN_DEFS]
@@ -1017,29 +1057,34 @@ def _page_gameover() -> None:
         fig_sub = go.Figure(go.Bar(
             x=sub_labels, y=sub_values,
             marker_color=sub_colours,
+            marker_line_width=0,
             text=[f"{v:.0f}%" for v in sub_values],
             textposition="outside",
-            hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
+            textfont=dict(size=13, color="#374151"),
+            hovertemplate="<b>%{x}</b>: %{y:.1f}%<extra></extra>",
         ))
-        fig_sub.add_hline(y=50, line_dash="dot", line_color="#9ca3af", line_width=1,
-                          annotation_text="Good function threshold",
-                          annotation_font_size=10)
-        fig_sub.update_layout(
-            height=220, margin=dict(l=0, r=0, t=8, b=30),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,248,0.9)",
-            yaxis=dict(range=[0, 110], gridcolor="#e9ecef",
-                       title="%", title_font=dict(size=10), tickfont=dict(size=9)),
-            xaxis=dict(tickfont=dict(size=11, color="#374151")),
-            showlegend=False,
+        fig_sub.add_hline(
+            y=50, line_dash="dot", line_color="#6b7280", line_width=1.5,
+            annotation_text="Target (50%)",
+            annotation_font_size=11,
+            annotation_position="bottom right",
         )
-        st.plotly_chart(fig_sub, use_container_width=True,
-                        config={"displayModeBar": False})
+        lay = _base_layout(260)
+        lay["showlegend"] = False
+        lay["yaxis"]["range"] = [0, 115]
+        lay["xaxis"] = dict(
+            gridcolor="#e9ecef", linecolor="#d1d5db",
+            tickfont=dict(size=14, color="#374151"),
+            zeroline=False,
+        )
+        fig_sub.update_layout(**lay)
+        st.plotly_chart(fig_sub, use_container_width=True, config=_CHART_CFG)
 
-        # Sub-function over time
+        # ── Sub-function trajectory over time ──────────────────────────────────
         if len(history) >= 2:
             st.markdown(
-                "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;margin-bottom:6px;'>"
-                "Sub-function Trajectory</p>",
+                "<p style='font-weight:700;color:#1b4332;font-size:0.95rem;"
+                "margin:16px 0 4px;'>Sub-function Trajectory</p>",
                 unsafe_allow_html=True,
             )
             years = [h["year"] for h in history]
@@ -1048,25 +1093,27 @@ def _page_gameover() -> None:
                 fig_fn.add_trace(go.Scatter(
                     x=years, y=[h[attr] for h in history],
                     name=f"{icon} {label}",
-                    line=dict(color=colour, width=2),
-                    mode="lines",
-                    hovertemplate=f"%{{y:.1f}}%<extra>{label}</extra>",
+                    line=dict(color=colour, width=2.5),
+                    mode="lines+markers",
+                    marker=dict(size=4, color=colour),
+                    hovertemplate=f"<b>{label}</b>: %{{y:.1f}}%<extra></extra>",
                 ))
-            fig_fn.add_hline(y=25, line_dash="dot", line_color="#c0392b", line_width=1,
-                             annotation_text="Liebig penalty below here",
-                             annotation_font_size=9)
-            fig_fn.update_layout(
-                height=200, margin=dict(l=0, r=0, t=8, b=36),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(248,250,248,0.9)",
-                legend=dict(orientation="h", y=-0.35, x=0, font=dict(size=10)),
-                xaxis=dict(title="Year", range=[0, 30], gridcolor="#e9ecef",
-                           title_font=dict(size=10), tickfont=dict(size=9)),
-                yaxis=dict(range=[0, 100], gridcolor="#e9ecef",
-                           title="%", title_font=dict(size=10), tickfont=dict(size=9)),
-                hovermode="x unified",
+            fig_fn.add_hline(
+                y=25, line_dash="dot", line_color="#dc2626", line_width=1.5,
+                annotation_text="Liebig penalty threshold (25%)",
+                annotation_font_size=11,
+                annotation_position="bottom right",
             )
-            st.plotly_chart(fig_fn, use_container_width=True,
-                            config={"displayModeBar": False})
+            fig_fn.update_layout(**_base_layout(
+                300,
+                xaxis=dict(
+                    title="Year", range=[0, 30],
+                    gridcolor="#e9ecef", linecolor="#d1d5db",
+                    tickfont=dict(size=12), title_font=dict(size=12),
+                    zeroline=False,
+                ),
+            ))
+            st.plotly_chart(fig_fn, use_container_width=True, config=_CHART_CFG)
 
     st.divider()
     if st.button("🌱 Play Again", type="primary", use_container_width=True):
